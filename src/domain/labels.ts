@@ -3,7 +3,7 @@
  * (targets/widget/ChainLogic.swift) — değişiklikleri iki tarafa da yansıtın.
  */
 import { type DayKey, diffDays, parseDayKey, weekdayOf, type Weekday } from './dates';
-import type { HabitStatus, StreakUnit } from './streak';
+import { countsToday, type HabitStatus, type StreakUnit } from './streak';
 import type { Schedule } from './types';
 
 export const WEEKDAY_NAMES = [
@@ -33,6 +33,8 @@ export const MONTH_NAMES = [
   'Kasım',
   'Aralık',
 ] as const;
+
+export const MONTH_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'] as const;
 
 export const ALL_DAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 export const WORK_DAYS: Weekday[] = [0, 1, 2, 3, 4];
@@ -107,7 +109,9 @@ export function statusText(schedule: Schedule, status: HabitStatus, today: DayKe
           ? `Bugün izin günü · sıradaki ${relativeDayLabel(status.nextDue, today)}`
           : 'Bugün izin günü';
       }
-      if (status.state === 'pending') return 'Zinciri korumak için bugün yap';
+      if (status.state === 'pending') {
+        return status.graceUsed ? 'Hata payını kullandın · bugün kaçırma' : 'Zinciri korumak için bugün yap';
+      }
       if (status.state === 'broken') return 'Zincir kırıldı · bugün yeniden başla';
       return 'İlk halkayı bugün ekle';
     }
@@ -115,7 +119,7 @@ export function statusText(schedule: Schedule, status: HabitStatus, today: DayKe
       if (status.doneToday) return 'Bugün tamamlandı';
       if (status.state === 'broken') return 'Zincir kırıldı · yeniden başla';
       if (status.state === 'new') return 'İlk halkayı ekle';
-      if (status.dueToday) return 'Bugün son gün!';
+      if (status.dueToday) return status.graceUsed ? 'Bugün son gün · hata payın yok' : 'Bugün son gün!';
       const left = status.nextDue ? diffDays(status.nextDue, today) : 0;
       return left === 1 ? 'En geç yarın yap' : `En geç ${left} gün içinde yap`;
     }
@@ -124,7 +128,11 @@ export function statusText(schedule: Schedule, status: HabitStatus, today: DayKe
       const progress = `Bu hafta ${week.done}/${week.target}`;
       const needed = week.target - week.done;
       if (needed <= 0) return `${progress} · hedef tamam`;
-      if (status.weekLost) return `${progress} · hedef kaçtı`;
+      if (status.weekLost) {
+        const available = status.doneToday ? week.daysLeft - 1 : week.daysLeft;
+        const graceSaves = status.graceAvailable && needed - available === 1;
+        return graceSaves ? `${progress} · hata payı kullanılacak` : `${progress} · hedef kaçtı`;
+      }
       if (status.dueToday) return `${progress} · bugün şart`;
       if (status.state === 'broken' && week.done === 0) return 'Zincir kırıldı · bu hafta yeniden başla';
       return `${progress} · ${needed} kez daha`;
@@ -139,7 +147,8 @@ export function shortStatus(schedule: Schedule, status: HabitStatus, today: DayK
     case 'days':
       if (!status.scheduledToday) return 'İzin günü';
       if (status.state === 'broken') return 'Zincir kırıldı';
-      return status.state === 'pending' ? 'Bugün yap' : 'Başla';
+      if (status.state === 'pending') return status.graceUsed ? 'Bugün kaçırma!' : 'Bugün yap';
+      return 'Başla';
     case 'interval': {
       if (status.state === 'broken') return 'Zincir kırıldı';
       if (status.state === 'new') return 'Başla';
@@ -154,10 +163,45 @@ export function shortStatus(schedule: Schedule, status: HabitStatus, today: DayK
   }
 }
 
+export interface ReminderItem {
+  name: string;
+  emoji: string;
+  schedule: Schedule;
+  status: HabitStatus;
+}
+
+/**
+ * Akşam hatırlatmasının içeriği (Swift: ZKText.reminder). Bugün bekleyen zincir
+ * yoksa null: o gün bildirim gönderilmez. Birden çok zincir tek bildirimde toplanır.
+ */
+export function reminderContent(items: ReminderItem[]): { title: string; body: string } | null {
+  const waiting = items.filter((i) => countsToday(i.schedule, i.status) && !i.status.doneToday);
+  if (waiting.length === 0) return null;
+  if (waiting.length === 1) {
+    const { name, emoji, status } = waiting[0];
+    let body: string;
+    if (status.graceUsed) body = 'Bugün yaptın mı? Hata payını kullandın, bugün kaçırırsan zincir kırılır.';
+    else if (status.streak > 0) body = `Bugün yaptın mı? ${status.streak} ${chainLengthLabel(status.unit)} kırılmasın.`;
+    else body = 'Bugün yaptın mı? Zincire bir halka eklemek için harika bir gün.';
+    return { title: `${emoji} ${name}`, body };
+  }
+  const names = waiting.map((i) => i.name);
+  const shown = names.length > 3 ? `${names.slice(0, 2).join(', ')} ve ${names.length - 2} zincir daha` : `${names.slice(0, -1).join(', ')} ve ${names[names.length - 1]}`;
+  const risky = waiting.filter((i) => i.status.graceUsed).map((i) => i.name);
+  const warning = risky.length > 0 ? ` ${risky.join(', ')} için hata payın kalmadı.` : '';
+  return { title: `Bugün ${waiting.length} zincir seni bekliyor`, body: `${shown}. Zinciri kırma!${warning}` };
+}
+
 /** "Salı, 29 Eylül" */
 export function longDateLabel(day: DayKey): string {
   const { day: d, month } = parseDayKey(day);
   return `${WEEKDAY_NAMES[weekdayOf(day)]}, ${d} ${MONTH_NAMES[month - 1]}`;
+}
+
+/** "Sal, 29 Eyl" (widget'lar için) */
+export function mediumDateLabel(day: DayKey): string {
+  const { day: d, month } = parseDayKey(day);
+  return `${WEEKDAY_SHORT[weekdayOf(day)]}, ${d} ${MONTH_SHORT[month - 1]}`;
 }
 
 /** "29 Eylül 2026" */

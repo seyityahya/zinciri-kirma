@@ -1,14 +1,22 @@
 import { create } from 'zustand';
 
-import { type DayKey, todayKey } from '@/domain/dates';
+import { type DayKey, logicalDayKey } from '@/domain/dates';
 import * as M from '@/domain/mutations';
-import { type AppData, emptyData, type Habit } from '@/domain/types';
+import { type AppData, type AppSettings, emptyData, type Habit } from '@/domain/types';
 import { parseAppData, serializeAppData } from '@/domain/validate';
+import { scheduleReminderSync } from '@/notifications/reminders';
 import { syncWidgets } from '@/widgets/sync';
 
 import { dataStorage } from './storage';
 
 type Mutator = (data: AppData) => AppData;
+
+export type SettingsPatch = Partial<Omit<AppSettings, 'reminder'>> & { reminder?: Partial<AppSettings['reminder']> };
+
+/** Ayarlara göre "mantıksal" bugün (gün, gece yarısı yerine dayStartHour'da biter). */
+export function dayNow(settings: AppSettings = useHabitStore.getState().data.settings, now: Date = new Date()): DayKey {
+  return logicalDayKey(now, settings.dayStartHour);
+}
 
 export interface HabitStore {
   data: AppData;
@@ -25,6 +33,8 @@ export interface HabitStore {
   /** Bugünü işaretler/kaldırır; yeni durumu döndürür. */
   toggleToday(id: string): boolean;
   reorder(ids: string[]): Promise<void>;
+  /** Paylaşılan ayarları günceller (gün bitişi, hata payı, hatırlatma). */
+  updateSettings(patch: SettingsPatch): Promise<void>;
   /** Hazır zincirleri toplu ekler (geliştirici örnek verisi). */
   addHabits(habits: Habit[]): Promise<void>;
   resetAll(): Promise<void>;
@@ -84,6 +94,7 @@ export const useHabitStore = create<HabitStore>((set, get) => {
         await dataStorage.save(serializeAppData(next));
         persisted = next;
         syncWidgets(next);
+        scheduleReminderSync(next);
       } finally {
         pending.shift();
         set({ data: applyPending(persisted) });
@@ -94,14 +105,15 @@ export const useHabitStore = create<HabitStore>((set, get) => {
   return {
     data: emptyData(),
     ready: false,
-    today: todayKey(),
+    today: dayNow(emptyData().settings),
 
     init() {
       if (!initPromise) {
         initPromise = enqueue(async () => {
           const stored = await readStored();
           persisted = stored ?? emptyData();
-          set({ data: applyPending(persisted), ready: true, today: todayKey() });
+          set({ data: applyPending(persisted), ready: true, today: dayNow(persisted.settings) });
+          scheduleReminderSync(persisted);
         });
       }
       return initPromise;
@@ -113,7 +125,10 @@ export const useHabitStore = create<HabitStore>((set, get) => {
         if (stored && stored.updatedAt !== persisted.updatedAt) {
           persisted = stored;
           set({ data: applyPending(persisted) });
+          scheduleReminderSync(persisted);
         }
+        const today = dayNow(get().data.settings);
+        if (get().today !== today) set({ today });
       });
     },
 
@@ -123,7 +138,7 @@ export const useHabitStore = create<HabitStore>((set, get) => {
 
     addHabit(input) {
       const now = Date.now();
-      const habit = M.createHabit(input, todayKey(), M.generateId(now), now);
+      const habit = M.createHabit(input, dayNow(get().data.settings), M.generateId(now), now);
       void commit((d) => M.addHabit(d, habit));
       return habit.id;
     },
@@ -137,12 +152,12 @@ export const useHabitStore = create<HabitStore>((set, get) => {
     },
 
     setCompletion(id, day, done) {
-      const today = todayKey();
+      const today = dayNow(get().data.settings);
       return commit((d) => M.setCompletion(d, id, day, done, today));
     },
 
     toggleToday(id) {
-      const today = todayKey();
+      const today = dayNow(get().data.settings);
       if (get().today !== today) set({ today });
       const habit = get().data.habits.find((h) => h.id === id);
       if (!habit) return false;
@@ -153,6 +168,20 @@ export const useHabitStore = create<HabitStore>((set, get) => {
 
     reorder(ids) {
       return commit((d) => M.reorderHabits(d, ids));
+    },
+
+    updateSettings(patch) {
+      const result = commit((d) => {
+        const settings: AppSettings = {
+          ...d.settings,
+          ...patch,
+          reminder: { ...d.settings.reminder, ...(patch.reminder ?? {}) },
+        };
+        const same = JSON.stringify(settings) === JSON.stringify(d.settings);
+        return same ? d : { ...d, settings };
+      });
+      set({ today: dayNow(get().data.settings) });
+      return result;
     },
 
     addHabits(habits) {
@@ -175,7 +204,7 @@ export function __resetStoreForTests(): void {
   persisted = emptyData();
   pending.length = 0;
   initPromise = null;
-  useHabitStore.setState({ data: emptyData(), ready: false, today: todayKey() });
+  useHabitStore.setState({ data: emptyData(), ready: false, today: dayNow(emptyData().settings) });
 }
 
 /** Kuyruktaki tüm kayıtlar bitene kadar bekler. */

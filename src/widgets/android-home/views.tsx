@@ -1,11 +1,17 @@
 'use no memo';
 // Android widget'ları React bileşeni değil, düz JSX ağacıdır: hook kullanılamaz ve
 // React Compiler bu dosyayı dönüştürmemelidir.
-import { FlexWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
+//
+// Kural: bir widget'ta en fazla BİR üst düzey tıklanabilir alan olmalı. Kütüphane
+// (react-native-android-widget 0.22) her alanın PendingIntent'ine istek kodu olarak
+// o anki milisaniyeyi veriyor; aynı anda oluşan alanlar birbirini iptal ediyor ve
+// düğmeler rastgele çalışmıyor. Birden çok düğme gereken yerde ListWidget kullanılır:
+// liste öğelerinin tıklamaları tek bir şablon üzerinden (fill-in intent) güvenle işler.
+import { FlexWidget, ListWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import type { ColorProp, HexColor } from 'react-native-android-widget';
 
 import type { DayKey } from '@/domain/dates';
-import { longDateLabel, shortStatus, unitLabel } from '@/domain/labels';
+import { longDateLabel, mediumDateLabel, shortStatus, unitLabel } from '@/domain/labels';
 import type { HabitStatus } from '@/domain/streak';
 import { computeStatus, countsToday, recentSlots } from '@/domain/streak';
 import type { Habit } from '@/domain/types';
@@ -16,8 +22,8 @@ import { checkSvg, flameSvg, linkSvg, miniChainSvg, moonSvg } from './svg';
 export type WidgetMode = 'light' | 'dark';
 
 const THEME = {
-  light: { bg: '#FFFFFF', text: '#1C1917', secondary: '#6F6862', flame: '#FF6B3D', danger: '#E5484D', muted: '#A39C95' },
-  dark: { bg: '#1A1816', text: '#F5F2EE', secondary: '#A8A19A', flame: '#FF7A4D', danger: '#FF6369', muted: '#6E6863' },
+  light: { bg: '#FFFFFF', text: '#1C1917', secondary: '#6F6862', flame: '#FF6B3D', danger: '#E5484D', warning: '#E08A00', muted: '#A39C95' },
+  dark: { bg: '#1A1816', text: '#F5F2EE', secondary: '#A8A19A', flame: '#FF7A4D', danger: '#FF6369', warning: '#FFB23F', muted: '#6E6863' },
 } as const;
 
 const hex = (value: string) => value as HexColor;
@@ -59,20 +65,25 @@ export function EmptyWidget({ mode }: { mode: WidgetMode }) {
 // Tek zincir (2x2)
 // ---------------------------------------------------------------------------
 
-export function HabitWidgetView({ habit, today, mode }: { habit: Habit; today: DayKey; mode: WidgetMode }) {
+interface HabitViewProps {
+  habit: Habit;
+  today: DayKey;
+  grace: boolean;
+  mode: WidgetMode;
+}
+
+export function HabitWidgetView({ habit, today, grace, mode }: HabitViewProps) {
   const t = THEME[mode];
-  const status = computeStatus(habit, today);
+  const status = computeStatus(habit, today, grace);
   const tint = habit.color;
   const done = status.doneToday;
   const restDay = !status.scheduledToday && !done;
-  const chain = miniChainSvg(recentSlots(habit, today, 5), { tint, danger: t.danger, empty: t.text });
+  const chain = miniChainSvg(recentSlots(habit, today, 5, grace), { tint, danger: t.danger, warning: t.warning, empty: t.text });
   const label = done ? 'Yapıldı' : restDay ? 'İzin günü' : 'Yaptım';
   const fg = done ? onColor(tint) : tint;
 
   return (
     <FlexWidget
-      clickAction="OPEN_URI"
-      clickActionData={link(habit.id)}
       accessibilityLabel={`${habit.name}, ${status.streak} ${unitLabel(status.unit)} zincir`}
       style={{
         height: 'match_parent',
@@ -120,6 +131,11 @@ export function HabitWidgetView({ habit, today, mode }: { habit: Habit; today: D
           truncate="END"
           style={{ fontSize: 13, fontWeight: '600', color: hex(t.text) }}
         />
+        <TextWidget
+          text={mediumDateLabel(today)}
+          maxLines={1}
+          style={{ fontSize: 11, fontWeight: '500', color: hex(status.graceUsed && !done ? t.warning : t.secondary), marginTop: 1 }}
+        />
       </FlexWidget>
 
       <FlexWidget
@@ -158,7 +174,7 @@ function TodayRow({ row, today, mode }: { row: Row; today: DayKey; mode: WidgetM
   const tint = habit.color;
   const done = status.doneToday;
   return (
-    <FlexWidget style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+    <FlexWidget style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
       <FlexWidget
         clickAction="OPEN_URI"
         clickActionData={link(habit.id)}
@@ -175,7 +191,7 @@ function TodayRow({ row, today, mode }: { row: Row; today: DayKey; mode: WidgetM
             text={shortStatus(habit.schedule, status, today)}
             maxLines={1}
             truncate="END"
-            style={{ fontSize: 11, color: hex(t.secondary) }}
+            style={{ fontSize: 11, color: hex(status.graceUsed && !status.doneToday ? t.warning : t.secondary) }}
           />
         </FlexWidget>
         <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6, marginRight: 10 }}>
@@ -211,20 +227,18 @@ function TodayRow({ row, today, mode }: { row: Row; today: DayKey; mode: WidgetM
 export function TodayWidgetView({
   habits,
   today,
+  grace,
   mode,
-  maxRows,
 }: {
   habits: Habit[];
   today: DayKey;
+  grace: boolean;
   mode: WidgetMode;
-  maxRows: number;
 }) {
   const t = THEME[mode];
-  const rows: Row[] = habits.map((habit) => ({ habit, status: computeStatus(habit, today) }));
+  const rows: Row[] = habits.map((habit) => ({ habit, status: computeStatus(habit, today, grace) }));
   const relevant = rows.filter((r) => countsToday(r.habit.schedule, r.status));
   const doneCount = relevant.filter((r) => r.status.doneToday).length;
-  const visible = rows.slice(0, Math.max(1, maxRows));
-  const hidden = rows.length - visible.length;
 
   return (
     <FlexWidget
@@ -234,14 +248,15 @@ export function TodayWidgetView({
         backgroundColor: hex(t.bg),
         borderRadius: 22,
         paddingHorizontal: 14,
-        paddingVertical: 12,
+        paddingTop: 12,
+        paddingBottom: 6,
         flexDirection: 'column',
       }}
     >
       <FlexWidget
         clickAction="OPEN_URI"
         clickActionData={link()}
-        style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center' }}
+        style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
       >
         <TextWidget text="Bugün" style={{ fontSize: 15, fontWeight: 'bold', color: hex(t.text) }} />
         <TextWidget
@@ -266,17 +281,79 @@ export function TodayWidgetView({
           />
         </FlexWidget>
       </FlexWidget>
-      {visible.map((row) => (
-        <TodayRow key={row.habit.id} row={row} today={today} mode={mode} />
-      ))}
-      {hidden > 0 ? (
+      <ListWidget style={{ height: 'match_parent', width: 'match_parent' }}>
+        {rows.map((row) => (
+          <TodayRow key={row.habit.id} row={row} today={today} mode={mode} />
+        ))}
+      </ListWidget>
+    </FlexWidget>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mini zincir (2x1)
+// ---------------------------------------------------------------------------
+
+export function HabitMiniWidgetView({ habit, today, grace, mode }: HabitViewProps) {
+  const t = THEME[mode];
+  const status = computeStatus(habit, today, grace);
+  const tint = habit.color;
+  const done = status.doneToday;
+  const active = status.streak > 0;
+  return (
+    <FlexWidget
+      accessibilityLabel={`${habit.name}, ${status.streak} ${unitLabel(status.unit)} zincir`}
+      style={{
+        height: 'match_parent',
+        width: 'match_parent',
+        backgroundColor: hex(t.bg),
+        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+      }}
+    >
+      <FlexWidget
+        style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: rgba(tint, 0.16), alignItems: 'center', justifyContent: 'center' }}
+      >
+        <TextWidget text={habit.emoji} style={{ fontSize: 17 }} allowFontScaling={false} />
+      </FlexWidget>
+      <FlexWidget style={{ flex: 1, flexDirection: 'column', marginLeft: 9, marginRight: 6 }}>
+        <TextWidget text={habit.name} maxLines={1} truncate="END" style={{ fontSize: 13, fontWeight: '700', color: hex(t.text) }} />
+        <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <SvgWidget svg={flameSvg(active ? t.flame : t.muted, active)} style={{ width: 11, height: 11 }} />
+          <TextWidget
+            text={`${status.streak} ${unitLabel(status.unit)}`}
+            style={{ fontSize: 12, fontWeight: '700', color: hex(active ? t.flame : t.muted), marginLeft: 2 }}
+            allowFontScaling={false}
+          />
+        </FlexWidget>
         <TextWidget
-          clickAction="OPEN_URI"
-          clickActionData={link()}
-          text={`+${hidden} zincir daha`}
-          style={{ fontSize: 11, fontWeight: '600', color: hex(t.secondary), marginTop: 8 }}
+          text={mediumDateLabel(today)}
+          maxLines={1}
+          truncate="END"
+          style={{ fontSize: 11, color: hex(status.graceUsed && !done ? t.warning : t.secondary) }}
+          allowFontScaling={false}
         />
-      ) : null}
+      </FlexWidget>
+      <FlexWidget
+        clickAction="TOGGLE"
+        clickActionData={{ habitId: habit.id, day: today }}
+        accessibilityLabel={done ? `${habit.name} tamamlandı, geri al` : `${habit.name} yaptım`}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: done ? hex(tint) : rgba(tint, 0.12),
+          borderWidth: done ? 0 : 2,
+          borderColor: rgba(tint, 0.55),
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <SvgWidget svg={done ? checkSvg(onColor(tint)) : checkSvg(tint, 3, 0.4)} style={{ width: 16, height: 16 }} />
+      </FlexWidget>
     </FlexWidget>
   );
 }

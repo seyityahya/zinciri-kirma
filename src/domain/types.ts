@@ -25,9 +25,26 @@ export interface Habit {
   createdAt: number;
 }
 
+export interface ReminderSettings {
+  enabled: boolean;
+  hour: number;
+  minute: number;
+}
+
+/** Widget'larla paylaşılan ayarlar (Swift: ZKSettings). */
+export interface AppSettings {
+  /** Gün bu saatte biter: 3 → gece 03:00'e kadar hâlâ önceki gün sayılır (0–6). */
+  dayStartHour: number;
+  /** Art arda 7 halkada 1 kaçırma zinciri kırmaz. */
+  grace: boolean;
+  /** Akşam, bekleyen zincirler için tek bir hatırlatma. */
+  reminder: ReminderSettings;
+}
+
 export interface AppData {
   version: 1;
   habits: Habit[];
+  settings: AppSettings;
   /** Son değişikliğin zamanı (ms). Uygulama ile widget arasındaki senkron için kullanılır. */
   updatedAt: number;
 }
@@ -43,6 +60,13 @@ export const SCHEDULE_LIMITS = {
 
 export const NAME_MAX_LENGTH = 40;
 
+export const DAY_START_HOURS = [0, 1, 2, 3, 4, 5, 6] as const;
+export const GRACE_WINDOW = 7;
+
+export function defaultSettings(): AppSettings {
+  return { dayStartHour: 3, grace: true, reminder: { enabled: true, hour: 21, minute: 0 } };
+}
+
 export function emptyData(): AppData {
-  return { version: DATA_VERSION, habits: [], updatedAt: 0 };
+  return { version: DATA_VERSION, habits: [], settings: defaultSettings(), updatedAt: 0 };
 }

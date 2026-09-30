@@ -82,10 +82,27 @@ enum DayMath {
     return calendar
   }
 
-  /// Yerel saate göre bugünün epoch günü.
-  static func today(_ date: Date = Date(), calendar: Calendar = DayMath.gregorian) -> Int {
+  /// Yerel saate göre takvim günü (epoch).
+  static func calendarDay(_ date: Date, calendar: Calendar = DayMath.gregorian) -> Int {
     let c = calendar.dateComponents([.year, .month, .day], from: date)
     return daysFromCivil(c.year ?? 1970, c.month ?? 1, c.day ?? 1)
+  }
+
+  /// "Mantıksal" bugün: gün `dayStartHour` saatinde biter (src/domain/dates.ts → logicalDayKey).
+  static func today(_ date: Date = Date(), dayStartHour: Int = ZKSettings.current.dayStartHour, calendar: Calendar = DayMath.gregorian) -> Int {
+    let hour = calendar.component(.hour, from: date)
+    let day = calendarDay(date, calendar: calendar)
+    return hour < dayStartHour ? day - 1 : day
+  }
+
+  /// Bir sonraki gün değişim anı (yerel dayStartHour:00).
+  static func nextBoundary(after date: Date, dayStartHour: Int, calendar: Calendar = DayMath.gregorian) -> Date {
+    let startOfDay = calendar.startOfDay(for: date)
+    if let candidate = calendar.date(bySettingHour: dayStartHour, minute: 0, second: 0, of: startOfDay), candidate > date {
+      return candidate
+    }
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? date.addingTimeInterval(86_400)
+    return calendar.date(bySettingHour: dayStartHour, minute: 0, second: 0, of: tomorrow) ?? tomorrow
   }
 }
 
@@ -192,6 +209,53 @@ struct ZKHabit: Identifiable, Equatable {
   }
 }
 
+// MARK: - Ayarlar
+
+/// src/domain/types.ts → AppSettings
+struct ZKSettings: Equatable {
+  var dayStartHour: Int
+  var grace: Bool
+  var reminderEnabled: Bool
+  var reminderHour: Int
+  var reminderMinute: Int
+
+  static let defaults = ZKSettings(dayStartHour: 3, grace: true, reminderEnabled: true, reminderHour: 21, reminderMinute: 0)
+
+  init(dayStartHour: Int, grace: Bool, reminderEnabled: Bool, reminderHour: Int, reminderMinute: Int) {
+    self.dayStartHour = dayStartHour
+    self.grace = grace
+    self.reminderEnabled = reminderEnabled
+    self.reminderHour = reminderHour
+    self.reminderMinute = reminderMinute
+  }
+
+  init(json: Any?) {
+    let d = ZKSettings.defaults
+    let v = json as? [String: Any] ?? [:]
+    let r = v["reminder"] as? [String: Any] ?? [:]
+    func bool(_ value: Any?, _ fallback: Bool) -> Bool {
+      if let n = value as? NSNumber, CFGetTypeID(n) == CFBooleanGetTypeID() { return n.boolValue }
+      return fallback
+    }
+    dayStartHour = ZKSettings.clamp(v["dayStartHour"], 0, 6, d.dayStartHour)
+    grace = bool(v["grace"], d.grace)
+    reminderEnabled = bool(r["enabled"], d.reminderEnabled)
+    reminderHour = ZKSettings.clamp(r["hour"], 0, 23, d.reminderHour)
+    reminderMinute = ZKSettings.clamp(r["minute"], 0, 59, d.reminderMinute)
+  }
+
+  static func clamp(_ value: Any?, _ lo: Int, _ hi: Int, _ fallback: Int) -> Int {
+    var n = fallback
+    if let num = value as? NSNumber, CFGetTypeID(num) != CFBooleanGetTypeID(), num.doubleValue.isFinite {
+      n = Int(num.doubleValue.rounded(.toNearestOrAwayFromZero))
+    }
+    return min(hi, max(lo, n))
+  }
+
+  /// Widget uzantısında paylaşılan veriden okunan güncel ayarlar (testte varsayılanlar).
+  nonisolated(unsafe) static var current = ZKSettings.defaults
+}
+
 // MARK: - Durum
 
 struct ZKWeek: Equatable {
@@ -214,6 +278,9 @@ struct ZKStatus: Equatable {
   var week: ZKWeek?
   var weekLost: Bool
   var successRate: Double?
+  var graceUsed: Bool
+  var graceRenewIn: Int?
+  var graceAvailable: Bool
 }
 
 struct ZKSlot: Equatable {
@@ -230,7 +297,34 @@ private struct Prepared {
   let origin: Int
 }
 
+/// Beklenen halka: "done" / "miss" / "pending"
+private struct Occurrence {
+  let state: String
+  let day: Int
+}
+
+private struct Evaluation {
+  let occ: [Occurrence]
+  let missKind: [Int: String]
+  let run: Int
+  let bestRun: Int
+  let chainStartIdx: Int?
+  let lastMissIdx: Int?
+  let everDone: Bool
+  let nextIdx: Int
+}
+
+private struct WeekInfo {
+  let start: Int
+  let target: Int
+  let count: Int
+  let from: Int
+  let to: Int
+}
+
 enum ChainLogic {
+  static let graceWindow = 7
+
   private static func prepare(_ habit: ZKHabit, _ today: Int) -> Prepared {
     let days = Array(Set(habit.completions.compactMap(DayMath.epochDay).filter { $0 <= today })).sorted()
     let start = min(DayMath.epochDay(habit.startDate) ?? today, today)
@@ -238,56 +332,83 @@ enum ChainLogic {
     return Prepared(today: today, days: days, set: Set(days), first: first, origin: min(start, first ?? Int.max))
   }
 
-  private static func stateOf(_ streak: Int, _ best: Int, _ due: Bool) -> String {
-    if streak > 0 { return due ? "pending" : "active" }
-    return best > 0 ? "broken" : "new"
+  private static func evaluate(_ occ: [Occurrence], _ grace: Bool) -> Evaluation {
+    var missKind: [Int: String] = [:]
+    var run = 0
+    var bestRun = 0
+    var chainStartIdx: Int? = nil
+    var lastMissIdx: Int? = nil
+    var everDone = false
+    var nextIdx: Int? = nil
+    for (i, o) in occ.enumerated() {
+      if o.state == "done" {
+        if run == 0 { chainStartIdx = i }
+        run += 1
+        everDone = true
+        bestRun = max(bestRun, run)
+      } else if o.state == "miss" {
+        let forgivable = grace && run > 0 && (lastMissIdx.map { i - $0 >= graceWindow } ?? true)
+        if forgivable {
+          missKind[i] = "forgiven"
+        } else {
+          missKind[i] = "broken"
+          run = 0
+          chainStartIdx = nil
+        }
+        lastMissIdx = i
+      } else if nextIdx == nil {
+        nextIdx = i
+      }
+    }
+    return Evaluation(occ: occ, missKind: missKind, run: run, bestRun: bestRun, chainStartIdx: chainStartIdx,
+                      lastMissIdx: lastMissIdx, everDone: everDone, nextIdx: nextIdx ?? occ.count)
   }
 
-  static func status(_ habit: ZKHabit, today: Int) -> ZKStatus {
+  private static func graceInfo(_ ev: Evaluation, _ grace: Bool) -> (used: Bool, renewIn: Int?, available: Bool) {
+    if !grace || ev.run == 0 { return (false, nil, false) }
+    let distance = ev.lastMissIdx.map { ev.nextIdx - $0 } ?? graceWindow
+    if distance >= graceWindow { return (false, nil, true) }
+    return (true, graceWindow - distance, false)
+  }
+
+  private static func stateOf(_ alive: Bool, _ everDone: Bool, _ due: Bool) -> String {
+    if alive { return due ? "pending" : "active" }
+    return everDone ? "broken" : "new"
+  }
+
+  static func status(_ habit: ZKHabit, today: Int, grace: Bool) -> ZKStatus {
     let p = prepare(habit, today)
     switch habit.schedule {
-    case .days(let days): return daysStatus(Set(days), p)
-    case .interval(let every): return intervalStatus(every, p)
-    case .weekly(let times): return weeklyStatus(habit, times, p)
+    case .days(let days): return daysStatus(Set(days), p, grace)
+    case .interval(let every): return intervalStatus(every, p, grace)
+    case .weekly(let times): return weeklyStatus(times, p, grace)
     }
   }
 
-  // Haftanın belirli günleri
-  private static func daysStatus(_ planned: Set<Int>, _ p: Prepared) -> ZKStatus {
+  // MARK: Haftanın belirli günleri
+
+  private static func daysOccurrences(_ isPlanned: (Int) -> Bool, _ p: Prepared) -> [Occurrence] {
+    var out: [Occurrence] = []
+    let t = p.today
+    guard let first = p.first else {
+      if isPlanned(t) { out.append(Occurrence(state: "pending", day: t)) }
+      return out
+    }
+    var d = first
+    while d <= t {
+      if isPlanned(d) {
+        if p.set.contains(d) { out.append(Occurrence(state: "done", day: d)) }
+        else { out.append(Occurrence(state: d == t ? "pending" : "miss", day: d)) }
+      }
+      d += 1
+    }
+    return out
+  }
+
+  private static func daysStatus(_ planned: Set<Int>, _ p: Prepared, _ grace: Bool) -> ZKStatus {
     let t = p.today
     func isPlanned(_ d: Int) -> Bool { planned.contains(DayMath.weekday(d)) }
-
-    var streak = 0
-    var chainStart: Int? = nil
-    var best = 0
-    if let first = p.first {
-      var d = t
-      while d >= first {
-        if isPlanned(d) {
-          if p.set.contains(d) {
-            streak += 1
-            chainStart = d
-          } else if d != t {
-            break
-          }
-        }
-        d -= 1
-      }
-
-      var run = 0
-      var e = first
-      while e <= t {
-        if isPlanned(e) {
-          if p.set.contains(e) {
-            run += 1
-            best = max(best, run)
-          } else if e != t {
-            run = 0
-          }
-        }
-        e += 1
-      }
-    }
+    let ev = evaluate(daysOccurrences(isPlanned, p), grace)
 
     var plannedCount = 0
     var doneCount = 0
@@ -314,166 +435,189 @@ enum ChainLogic {
     let doneToday = p.set.contains(t)
     let scheduledToday = isPlanned(t)
     let dueToday = scheduledToday && !doneToday
+    let alive = ev.run > 0
+    let g = graceInfo(ev, grace)
     return ZKStatus(
-      streak: streak,
-      best: best,
+      streak: ev.run,
+      best: ev.bestRun,
       total: p.days.count,
       unit: "day",
       doneToday: doneToday,
       scheduledToday: scheduledToday,
       dueToday: dueToday,
-      state: stateOf(streak, best, dueToday),
-      chainStart: chainStart.map(DayMath.key),
+      state: stateOf(alive, ev.everDone, dueToday),
+      chainStart: ev.chainStartIdx.map { DayMath.key(ev.occ[$0].day) },
       nextDue: nextDue.map(DayMath.key),
       week: nil,
       weekLost: false,
-      successRate: plannedCount > 0 ? Double(doneCount) / Double(plannedCount) : nil
+      successRate: plannedCount > 0 ? Double(doneCount) / Double(plannedCount) : nil,
+      graceUsed: g.used,
+      graceRenewIn: g.renewIn,
+      graceAvailable: g.available
     )
   }
 
-  // N günde bir
-  private static func intervalStatus(_ every: Int, _ p: Prepared) -> ZKStatus {
-    let t = p.today
+  // MARK: N günde bir
+
+  private static func intervalOccurrences(_ every: Int, _ p: Prepared) -> [Occurrence] {
+    var out: [Occurrence] = []
     let list = p.days
-    var best = 0
-    var run = 0
+    let t = p.today
     for i in list.indices {
-      run = (i > 0 && list[i] - list[i - 1] <= every) ? run + 1 : 1
-      best = max(best, run)
-    }
-
-    var streak = 0
-    var chainStart: Int? = nil
-    var nextDue: Int? = nil
-    let last = list.last
-    let alive = last.map { t - $0 <= every } ?? false
-    if alive, let last {
-      streak = 1
-      var i = list.count - 1
-      while i > 0 && list[i] - list[i - 1] <= every {
-        streak += 1
-        i -= 1
+      if i > 0 {
+        let gap = list[i] - list[i - 1]
+        let misses = gap > every ? Int((Double(gap) / Double(every)).rounded(.up)) - 1 : 0
+        if misses > 0 {
+          for k in 1...misses { out.append(Occurrence(state: "miss", day: list[i - 1] + k * every)) }
+        }
       }
-      chainStart = list[i]
-      nextDue = last + every
+      out.append(Occurrence(state: "done", day: list[i]))
     }
+    guard let last = list.last else {
+      out.append(Occurrence(state: "pending", day: t))
+      return out
+    }
+    let elapsed = t - last
+    if elapsed > 0 {
+      let misses = Int((Double(elapsed) / Double(every)).rounded(.up)) - 1
+      if misses > 0 {
+        for k in 1...misses { out.append(Occurrence(state: "miss", day: last + k * every)) }
+      }
+      out.append(Occurrence(state: "pending", day: last + (misses + 1) * every))
+    }
+    return out
+  }
 
+  private static func intervalStatus(_ every: Int, _ p: Prepared, _ grace: Bool) -> ZKStatus {
+    let t = p.today
+    let ev = evaluate(intervalOccurrences(every, p), grace)
+    let list = p.days
+    let last = list.last
     let doneToday = last == t
+    let alive = ev.run > 0
+
+    var nextDue: Int? = nil
+    if alive, let last {
+      if doneToday { nextDue = t + every }
+      else if let pending = ev.occ.last, pending.state == "pending" { nextDue = pending.day }
+      else { nextDue = last + every }
+    }
     let dueToday = alive && !doneToday && nextDue == t
+    let g = graceInfo(ev, grace)
     return ZKStatus(
-      streak: streak,
-      best: best,
+      streak: ev.run,
+      best: ev.bestRun,
       total: list.count,
       unit: "time",
       doneToday: doneToday,
       scheduledToday: true,
       dueToday: dueToday,
-      state: stateOf(streak, best, dueToday),
-      chainStart: chainStart.map(DayMath.key),
+      state: stateOf(alive, ev.everDone, dueToday),
+      chainStart: ev.chainStartIdx.map { DayMath.key(ev.occ[$0].day) },
       nextDue: nextDue.map(DayMath.key),
       week: nil,
       weekLost: false,
-      successRate: nil
+      successRate: nil,
+      graceUsed: g.used,
+      graceRenewIn: g.renewIn,
+      graceAvailable: g.available
     )
   }
 
-  // Haftada N kez
-  private struct WeeklyContext {
-    let times: Int
-    let startWeek: Int
-    let startWeekday: Int
-    let p: Prepared
+  // MARK: Haftada N kez
 
-    func count(_ weekStart: Int) -> Int {
-      var c = 0
-      var d = weekStart
-      while d < weekStart + 7 && d <= p.today {
-        if p.set.contains(d) { c += 1 }
-        d += 1
-      }
-      return c
+  private static func weekCount(_ p: Prepared, _ weekStart: Int) -> Int {
+    var c = 0
+    var d = weekStart
+    while d < weekStart + 7 && d <= p.today {
+      if p.set.contains(d) { c += 1 }
+      d += 1
     }
-
-    func target(_ weekStart: Int) -> Int {
-      weekStart == startWeek ? min(times, 7 - startWeekday) : times
-    }
-
-    func satisfied(_ weekStart: Int) -> Bool { count(weekStart) >= target(weekStart) }
+    return c
   }
 
-  private static func weeklyContext(_ habit: ZKHabit, _ times: Int, _ p: Prepared) -> WeeklyContext {
-    let start = min(DayMath.epochDay(habit.startDate) ?? p.today, p.today)
-    return WeeklyContext(times: times, startWeek: DayMath.weekStart(start), startWeekday: DayMath.weekday(start), p: p)
-  }
-
-  private static func weeklyStatus(_ habit: ZKHabit, _ times: Int, _ p: Prepared) -> ZKStatus {
+  private static func weeklyModel(_ times: Int, _ p: Prepared) -> (occ: [Occurrence], weeks: [WeekInfo]) {
     let t = p.today
-    let ctx = weeklyContext(habit, times, p)
+    let current = DayMath.weekStart(t)
+    let startDay = p.first ?? t
+    let firstWeek = DayMath.weekStart(startDay)
+    var occ: [Occurrence] = []
+    var weeks: [WeekInfo] = []
+    var w = firstWeek
+    while w <= current {
+      let target = w == firstWeek ? min(times, 7 - DayMath.weekday(startDay)) : times
+      let count = min(weekCount(p, w), target)
+      let from = occ.count
+      for _ in 0..<count { occ.append(Occurrence(state: "done", day: w)) }
+      if count < target {
+        for _ in count..<target { occ.append(Occurrence(state: w < current ? "miss" : "pending", day: w)) }
+      }
+      weeks.append(WeekInfo(start: w, target: target, count: count, from: from, to: occ.count))
+      w += 7
+    }
+    return (occ, weeks)
+  }
+
+  private static func weekVerdict(_ ev: Evaluation, _ week: WeekInfo) -> String {
+    if week.count >= week.target { return "done" }
+    if (week.from..<week.to).contains(where: { ev.missKind[$0] == "broken" }) { return "missed" }
+    if (week.from..<week.to).contains(where: { ev.missKind[$0] == "forgiven" }) { return "forgiven" }
+    return "pending"
+  }
+
+  private static func weeklyStatus(_ times: Int, _ p: Prepared, _ grace: Bool) -> ZKStatus {
+    let t = p.today
+    let model = weeklyModel(times, p)
+    let ev = evaluate(model.occ, grace)
     let current = DayMath.weekStart(t)
 
-    var streak = 0
-    var chainStart: Int? = nil
-    if ctx.satisfied(current) {
-      streak = 1
-      chainStart = current
-    }
+    var run = 0
     var best = 0
-    if let first = p.first {
-      var w = current - 7
-      while w + 6 >= first {
-        if !ctx.satisfied(w) { break }
-        streak += 1
-        chainStart = w
-        w -= 7
+    var closedWeeks = 0
+    var doneWeeks = 0
+    for week in model.weeks {
+      let verdict = weekVerdict(ev, week)
+      if verdict == "missed" {
+        run = 0
+      } else if verdict == "done" {
+        run += 1
+        best = max(best, run)
       }
-
-      var run = 0
-      var x = DayMath.weekStart(first)
-      while x <= current {
-        if ctx.satisfied(x) {
-          run += 1
-          best = max(best, run)
-        } else if x != current {
-          run = 0
-        }
-        x += 7
+      if week.start < current || verdict == "done" {
+        closedWeeks += 1
+        if verdict == "done" { doneWeeks += 1 }
       }
     }
+    let alive = ev.run > 0
+    let chainStart = alive ? ev.chainStartIdx.map { ev.occ[$0].day } : nil
 
-    var weeksCounted = 0
-    var weeksDone = 0
-    var y = DayMath.weekStart(p.origin)
-    while y <= current {
-      let ok = ctx.satisfied(y)
-      if !(y == current && !ok) {
-        weeksCounted += 1
-        if ok { weeksDone += 1 }
-      }
-      y += 7
-    }
-
-    let done = ctx.count(current)
-    let target = ctx.target(current)
+    let currentWeek = model.weeks[model.weeks.count - 1]
+    let done = currentWeek.count
+    let target = currentWeek.target
     let doneToday = p.set.contains(t)
     let weekday = DayMath.weekday(t)
     let needed = max(0, target - done)
     let available = doneToday ? 6 - weekday : 7 - weekday
     let weekLost = needed > available
     let dueToday = !doneToday && needed > 0 && needed == available
+    let g = graceInfo(ev, grace)
     return ZKStatus(
-      streak: streak,
+      streak: alive ? run : 0,
       best: best,
       total: p.days.count,
       unit: "week",
       doneToday: doneToday,
       scheduledToday: true,
       dueToday: dueToday,
-      state: stateOf(streak, best, dueToday),
+      state: stateOf(alive, ev.everDone, dueToday),
       chainStart: chainStart.map(DayMath.key),
       nextDue: nil,
       week: ZKWeek(done: done, target: target, daysLeft: 7 - weekday),
       weekLost: weekLost,
-      successRate: weeksCounted > 0 ? Double(weeksDone) / Double(weeksCounted) : nil
+      successRate: closedWeeks > 0 ? Double(doneWeeks) / Double(closedWeeks) : nil,
+      graceUsed: g.used,
+      graceRenewIn: g.renewIn,
+      graceAvailable: g.available
     )
   }
 
@@ -489,63 +633,48 @@ enum ChainLogic {
 
   // MARK: Zincir halkaları
 
-  static func recentSlots(_ habit: ZKHabit, today: Int, count: Int) -> [ZKSlot] {
+  private static func occurrenceSlot(_ ev: Evaluation, _ i: Int, _ key: String) -> ZKSlot {
+    let o = ev.occ[i]
+    if o.state == "done" { return ZKSlot(key: key, state: "done") }
+    if o.state == "pending" { return ZKSlot(key: key, state: "pending") }
+    return ZKSlot(key: key, state: ev.missKind[i] == "forgiven" ? "forgiven" : "missed")
+  }
+
+  static func recentSlots(_ habit: ZKHabit, today: Int, count: Int, grace: Bool) -> [ZKSlot] {
     let p = prepare(habit, today)
-    let t = p.today
     var slots: [ZKSlot] = []
 
     switch habit.schedule {
     case .days(let days):
       let planned = Set(days)
-      var d = t
-      while slots.count < count && d > t - count * 7 - 7 {
-        if planned.contains(DayMath.weekday(d)) {
-          let state: String
-          if d == t { state = p.set.contains(d) ? "done" : "pending" }
-          else if p.set.contains(d) { state = "done" }
-          else if d < p.origin { state = "empty" }
-          else { state = "missed" }
-          slots.append(ZKSlot(key: DayMath.key(d), state: state))
-        }
-        d -= 1
-      }
-      slots.reverse()
+      let ev = evaluate(daysOccurrences({ planned.contains(DayMath.weekday($0)) }, p), grace)
+      let from = max(0, ev.occ.count - count)
+      for i in from..<ev.occ.count { slots.append(occurrenceSlot(ev, i, DayMath.key(ev.occ[i].day))) }
 
     case .weekly(let times):
-      let ctx = weeklyContext(habit, times, p)
-      let current = DayMath.weekStart(t)
-      let originWeek = DayMath.weekStart(p.origin)
+      let model = weeklyModel(times, p)
+      let ev = evaluate(model.occ, grace)
+      let current = DayMath.weekStart(p.today)
+      var byStart: [Int: WeekInfo] = [:]
+      for w in model.weeks { byStart[w.start] = w }
       for i in stride(from: count - 1, through: 0, by: -1) {
-        let w = current - i * 7
-        let progress = min(1, Double(ctx.count(w)) / Double(ctx.target(w)))
-        let state: String
-        if w < originWeek { state = "empty" }
-        else if progress >= 1 { state = "done" }
-        else if w == current { state = "pending" }
-        else { state = "missed" }
-        slots.append(ZKSlot(key: DayMath.key(w), state: state, progress: progress))
+        let start = current - i * 7
+        guard let week = byStart[start] else {
+          slots.append(ZKSlot(key: DayMath.key(start), state: "empty"))
+          continue
+        }
+        let progress = week.target > 0 ? min(1, Double(week.count) / Double(week.target)) : 0
+        slots.append(ZKSlot(key: DayMath.key(start), state: weekVerdict(ev, week), progress: progress))
       }
 
     case .interval(let every):
-      let list = p.days
-      var seq: [ZKSlot] = []
-      for i in list.indices {
-        if i > 0 && list[i] - list[i - 1] > every {
-          seq.append(ZKSlot(key: "miss-\(DayMath.key(list[i - 1] + every + 1))", state: "missed"))
-        }
-        seq.append(ZKSlot(key: DayMath.key(list[i]), state: "done"))
+      let ev = evaluate(intervalOccurrences(every, p), grace)
+      let from = max(0, ev.occ.count - count)
+      for i in from..<ev.occ.count {
+        let o = ev.occ[i]
+        let key = o.state == "done" ? DayMath.key(o.day) : (o.state == "pending" ? "next" : "miss-\(DayMath.key(o.day))")
+        slots.append(occurrenceSlot(ev, i, key))
       }
-      if let last = list.last {
-        if t - last > every {
-          seq.append(ZKSlot(key: "miss-\(DayMath.key(last + every + 1))", state: "missed"))
-          seq.append(ZKSlot(key: "next", state: "pending"))
-        } else if last != t {
-          seq.append(ZKSlot(key: "next", state: "pending"))
-        }
-      } else {
-        seq.append(ZKSlot(key: "next", state: "pending"))
-      }
-      slots.append(contentsOf: seq.suffix(count))
     }
 
     var pad = 0
@@ -589,6 +718,14 @@ enum ZKText {
     }
   }
 
+  static func chainLengthLabel(_ unit: String) -> String {
+    switch unit {
+    case "week": return "haftalık zincir"
+    case "time": return "halkalık zincir"
+    default: return "günlük zincir"
+    }
+  }
+
   static func relativeDay(_ day: String, today: Int) -> String {
     guard let d = DayMath.epochDay(day) else { return day }
     let diff = d - today
@@ -607,14 +744,16 @@ enum ZKText {
         if let next = s.nextDue { return "Bugün izin günü · sıradaki \(relativeDay(next, today: today))" }
         return "Bugün izin günü"
       }
-      if s.state == "pending" { return "Zinciri korumak için bugün yap" }
+      if s.state == "pending" {
+        return s.graceUsed ? "Hata payını kullandın · bugün kaçırma" : "Zinciri korumak için bugün yap"
+      }
       if s.state == "broken" { return "Zincir kırıldı · bugün yeniden başla" }
       return "İlk halkayı bugün ekle"
     case .interval:
       if s.doneToday { return "Bugün tamamlandı" }
       if s.state == "broken" { return "Zincir kırıldı · yeniden başla" }
       if s.state == "new" { return "İlk halkayı ekle" }
-      if s.dueToday { return "Bugün son gün!" }
+      if s.dueToday { return s.graceUsed ? "Bugün son gün · hata payın yok" : "Bugün son gün!" }
       let left = s.nextDue.flatMap(DayMath.epochDay).map { $0 - today } ?? 0
       return left == 1 ? "En geç yarın yap" : "En geç \(left) gün içinde yap"
     case .weekly(let times):
@@ -622,21 +761,26 @@ enum ZKText {
       let progress = "Bu hafta \(week.done)/\(week.target)"
       let needed = week.target - week.done
       if needed <= 0 { return "\(progress) · hedef tamam" }
-      if s.weekLost { return "\(progress) · hedef kaçtı" }
+      if s.weekLost {
+        let available = s.doneToday ? week.daysLeft - 1 : week.daysLeft
+        let graceSaves = s.graceAvailable && needed - available == 1
+        return graceSaves ? "\(progress) · hata payı kullanılacak" : "\(progress) · hedef kaçtı"
+      }
       if s.dueToday { return "\(progress) · bugün şart" }
       if s.state == "broken" && week.done == 0 { return "Zincir kırıldı · bu hafta yeniden başla" }
       return "\(progress) · \(needed) kez daha"
     }
   }
 
-  /// Widget'lar için kısa durum: "Bugün tamamlandı" yerine "Tamamlandı" gibi.
+  /// Widget'lar için kısa durum (src/domain/labels.ts → shortStatus).
   static func shortStatus(_ schedule: ZKSchedule, _ s: ZKStatus, today: Int) -> String {
     if s.doneToday { return "Tamamlandı" }
     switch schedule {
     case .days:
       if !s.scheduledToday { return "İzin günü" }
       if s.state == "broken" { return "Zincir kırıldı" }
-      return s.state == "pending" ? "Bugün yap" : "Başla"
+      if s.state == "pending" { return s.graceUsed ? "Bugün kaçırma!" : "Bugün yap" }
+      return "Başla"
     case .interval:
       if s.state == "broken" { return "Zincir kırıldı" }
       if s.state == "new" { return "Başla" }
@@ -649,15 +793,89 @@ enum ZKText {
     }
   }
 
+  /// Akşam hatırlatması (src/domain/labels.ts → reminderContent).
+  static func reminder(_ items: [(name: String, emoji: String, schedule: ZKSchedule, status: ZKStatus)]) -> (title: String, body: String)? {
+    let waiting = items.filter { ChainLogic.countsToday($0.schedule, $0.status) && !$0.status.doneToday }
+    if waiting.isEmpty { return nil }
+    if waiting.count == 1 {
+      let item = waiting[0]
+      let body: String
+      if item.status.graceUsed { body = "Bugün yaptın mı? Hata payını kullandın, bugün kaçırırsan zincir kırılır." }
+      else if item.status.streak > 0 { body = "Bugün yaptın mı? \(item.status.streak) \(chainLengthLabel(item.status.unit)) kırılmasın." }
+      else { body = "Bugün yaptın mı? Zincire bir halka eklemek için harika bir gün." }
+      return ("\(item.emoji) \(item.name)", body)
+    }
+    let names = waiting.map { $0.name }
+    let shown = names.count > 3
+      ? "\(names.prefix(2).joined(separator: ", ")) ve \(names.count - 2) zincir daha"
+      : "\(names.dropLast().joined(separator: ", ")) ve \(names[names.count - 1])"
+    let risky = waiting.filter { $0.status.graceUsed }.map { $0.name }
+    let warning = risky.isEmpty ? "" : " \(risky.joined(separator: ", ")) için hata payın kalmadı."
+    return ("Bugün \(waiting.count) zincir seni bekliyor", "\(shown). Zinciri kırma!\(warning)")
+  }
+
   /// "Salı, 29 Eylül"
   static func longDate(_ day: Int) -> String {
     let c = DayMath.civil(day)
     return "\(weekdayNames[DayMath.weekday(day)]), \(c.day) \(monthNames[c.month - 1])"
   }
 
+  /// "Sal, 29 Eyl"
+  static func mediumDate(_ day: Int) -> String {
+    let c = DayMath.civil(day)
+    return "\(weekdayShort[DayMath.weekday(day)]), \(c.day) \(monthShort[c.month - 1])"
+  }
+
   /// "29 Eyl"
   static func shortDate(_ day: Int) -> String {
     let c = DayMath.civil(day)
     return "\(c.day) \(monthShort[c.month - 1])"
+  }
+}
+
+// MARK: - Hatırlatma planı
+
+/// src/notifications/plan.ts → planReminders ile aynı.
+struct ZKPlannedReminder: Equatable {
+  let id: String
+  let day: String
+  let at: Date
+  let title: String
+  let body: String
+}
+
+enum ReminderPlanner {
+  static let prefix = "zk-reminder-"
+  static let days = 14
+
+  static func reminderTime(day: Int, hour: Int, minute: Int, dayStartHour: Int, calendar: Calendar = DayMath.gregorian) -> Date {
+    let c = DayMath.civil(day + (hour < dayStartHour ? 1 : 0))
+    var comps = DateComponents()
+    comps.year = c.year
+    comps.month = c.month
+    comps.day = c.day
+    comps.hour = hour
+    comps.minute = minute
+    comps.second = 0
+    return calendar.date(from: comps) ?? Date.distantFuture
+  }
+
+  static func plan(habits: [ZKHabit], settings: ZKSettings, now: Date) -> [ZKPlannedReminder] {
+    guard settings.reminderEnabled, !habits.isEmpty else { return [] }
+    let today = DayMath.today(now, dayStartHour: settings.dayStartHour)
+    var out: [ZKPlannedReminder] = []
+    for i in 0..<days {
+      let day = today + i
+      let at = reminderTime(day: day, hour: settings.reminderHour, minute: settings.reminderMinute, dayStartHour: settings.dayStartHour)
+      if at <= now { continue }
+      let items = habits.map { h in
+        (name: h.name, emoji: h.emoji, schedule: h.schedule, status: ChainLogic.status(h, today: day, grace: settings.grace))
+      }
+      if let content = ZKText.reminder(items) {
+        let key = DayMath.key(day)
+        out.append(ZKPlannedReminder(id: prefix + key, day: key, at: at, title: content.title, body: content.body))
+      }
+    }
+    return out
   }
 }

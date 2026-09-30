@@ -21,11 +21,15 @@ struct HabitItem: Identifiable {
   let dayKey: String
   var id: String { habit.id }
 
-  init(habit: ZKHabit, today: Int) {
+  /// Bu girdinin gösterdiği mantıksal gün.
+  let today: Int
+
+  init(habit: ZKHabit, today: Int, grace: Bool = ZKSettings.current.grace) {
     self.habit = habit
+    self.today = today
     dayKey = DayMath.key(today)
-    status = ChainLogic.status(habit, today: today)
-    slots = ChainLogic.recentSlots(habit, today: today, count: 7)
+    status = ChainLogic.status(habit, today: today, grace: grace)
+    slots = ChainLogic.recentSlots(habit, today: today, count: 7, grace: grace)
     shortText = ZKText.shortStatus(habit.schedule, status, today: today)
   }
 
@@ -51,14 +55,14 @@ struct HabitItem: Identifiable {
   }
 }
 
-/// Şimdi ve sonraki üç gece yarısı: gün değişince widget kendiliğinden yenilenir.
-func timelineDates(from now: Date, calendar: Calendar = DayMath.gregorian) -> [Date] {
+/// Şimdi ve sonraki üç gün değişimi (varsayılan 03:00): gün değişince widget kendiliğinden yenilenir.
+func timelineDates(from now: Date, dayStartHour: Int) -> [Date] {
   var dates = [now]
-  var cursor = calendar.startOfDay(for: now)
+  var cursor = now
   for _ in 0..<3 {
-    guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+    let next = DayMath.nextBoundary(after: cursor, dayStartHour: dayStartHour)
     dates.append(next.addingTimeInterval(1))
-    cursor = next
+    cursor = next.addingTimeInterval(1)
   }
   return dates
 }
@@ -84,6 +88,7 @@ struct MiniChain: View {
   private func color(for slot: ZKSlot) -> Color {
     switch slot.state {
     case "done": return tint
+    case "forgiven": return ZKTheme.warning
     case "missed": return ZKTheme.danger.opacity(0.75)
     case "pending": return tint.opacity(0.55)
     default: return ZKTheme.emptyLink
@@ -150,20 +155,24 @@ struct HabitProvider: AppIntentTimelineProvider {
   }
 
   func snapshot(for configuration: SelectHabitIntent, in context: Context) async -> HabitEntry {
-    let entry = makeEntry(configuration, date: Date(), habits: SharedStore.loadHabits())
+    let entry = makeEntry(configuration, date: Date(), snap: SharedStore.snapshot())
     if entry.item == nil && context.isPreview { return placeholder(in: context) }
     return entry
   }
 
   func timeline(for configuration: SelectHabitIntent, in context: Context) async -> Timeline<HabitEntry> {
-    let habits = SharedStore.loadHabits()
-    let entries = timelineDates(from: Date()).map { makeEntry(configuration, date: $0, habits: habits) }
+    let snap = SharedStore.snapshot()
+    let entries = timelineDates(from: Date(), dayStartHour: snap.settings.dayStartHour).map {
+      makeEntry(configuration, date: $0, snap: snap)
+    }
     return Timeline(entries: entries, policy: .atEnd)
   }
 
-  private func makeEntry(_ configuration: SelectHabitIntent, date: Date, habits: [ZKHabit]) -> HabitEntry {
+  private func makeEntry(_ configuration: SelectHabitIntent, date: Date, snap: SharedStore.Snapshot) -> HabitEntry {
+    let habits = snap.habits
     let selected = configuration.habit.flatMap { entity in habits.first { $0.id == entity.id } } ?? habits.first
-    return HabitEntry(date: date, item: selected.map { HabitItem(habit: $0, today: DayMath.today(date)) })
+    let today = DayMath.today(date, dayStartHour: snap.settings.dayStartHour)
+    return HabitEntry(date: date, item: selected.map { HabitItem(habit: $0, today: today, grace: snap.settings.grace) })
   }
 }
 
@@ -210,13 +219,22 @@ struct SmallHabitView: View {
     let restDay = !status.scheduledToday && !done
 
     VStack(alignment: .leading, spacing: 0) {
-      HStack(alignment: .center, spacing: 6) {
+      HStack(alignment: .top, spacing: 6) {
         Text(item.habit.emoji)
           .font(.system(size: 18))
           .frame(width: 32, height: 32)
           .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         Spacer(minLength: 2)
-        MiniChain(slots: Array(item.slots.suffix(5)), tint: tint, linkWidth: 12, linkHeight: 8)
+        VStack(alignment: .trailing, spacing: 1) {
+          Text(ZKText.weekdayShort[DayMath.weekday(item.today)])
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(status.graceUsed && !done ? ZKTheme.warning : ZKTheme.flame)
+          Text(ZKText.shortDate(item.today))
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
+        .accessibilityLabel(ZKText.longDate(item.today))
       }
 
       Spacer(minLength: 4)
@@ -232,6 +250,9 @@ struct SmallHabitView: View {
         Text(ZKText.unitLabel(status.unit))
           .font(.system(size: 13, weight: .semibold, design: .rounded))
           .foregroundStyle(.secondary)
+        Spacer(minLength: 2)
+        MiniChain(slots: Array(item.slots.suffix(3)), tint: tint, linkWidth: 11, linkHeight: 7)
+          .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + 4 }
       }
       .lineLimit(1)
       .minimumScaleFactor(0.7)
@@ -347,19 +368,21 @@ struct TodayProvider: TimelineProvider {
   }
 
   func getSnapshot(in context: Context, completion: @escaping (TodayEntry) -> Void) {
-    let entry = makeEntry(date: Date(), habits: SharedStore.loadHabits())
+    let entry = makeEntry(date: Date(), snap: SharedStore.snapshot())
     completion(entry.items.isEmpty && context.isPreview ? placeholder(in: context) : entry)
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<TodayEntry>) -> Void) {
-    let habits = SharedStore.loadHabits()
-    let entries = timelineDates(from: Date()).map { makeEntry(date: $0, habits: habits) }
+    let snap = SharedStore.snapshot()
+    let entries = timelineDates(from: Date(), dayStartHour: snap.settings.dayStartHour).map {
+      makeEntry(date: $0, snap: snap)
+    }
     completion(Timeline(entries: entries, policy: .atEnd))
   }
 
-  private func makeEntry(date: Date, habits: [ZKHabit]) -> TodayEntry {
-    let today = DayMath.today(date)
-    return TodayEntry(date: date, today: today, items: habits.map { HabitItem(habit: $0, today: today) })
+  private func makeEntry(date: Date, snap: SharedStore.Snapshot) -> TodayEntry {
+    let today = DayMath.today(date, dayStartHour: snap.settings.dayStartHour)
+    return TodayEntry(date: date, today: today, items: snap.habits.map { HabitItem(habit: $0, today: today, grace: snap.settings.grace) })
   }
 }
 

@@ -138,9 +138,10 @@ function Summary() {
   const { colors } = useTheme();
   const habits = useHabitStore((s) => s.data.habits);
   const today = useHabitStore((s) => s.today);
+  const grace = useHabitStore((s) => s.data.settings.grace);
 
   const { relevant, done, best } = useMemo(() => {
-    const items = habits.map((habit) => ({ habit, status: computeStatus(habit, today) }));
+    const items = habits.map((habit) => ({ habit, status: computeStatus(habit, today, grace) }));
     const rel = items.filter((x) => countsToday(x.habit.schedule, x.status));
     // Farklı birimleri (gün/hafta/kez) karşılaştırmak için zincirin kaç gündür sürdüğüne bak.
     const top = items.reduce<(typeof items)[number] | null>((acc, x) => {
@@ -149,7 +150,7 @@ function Summary() {
       return chainAgeDays(x.status, today) > chainAgeDays(acc.status, today) ? x : acc;
     }, null);
     return { relevant: rel.length, done: rel.filter((x) => x.status.doneToday).length, best: top };
-  }, [habits, today]);
+  }, [habits, today, grace]);
 
   const left = relevant - done;
   let title: string;

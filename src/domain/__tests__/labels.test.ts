@@ -13,7 +13,7 @@ import { back, DAILY, habit, MON, SAT, SUN, THU, TUE, WED, WEEKDAYS } from './he
 
 function text(schedule: Schedule, completions: string[], today: string, start?: string) {
   const h = habit(schedule, completions, start);
-  return statusText(schedule, computeStatus(h, today), today);
+  return statusText(schedule, computeStatus(h, today, false), today);
 }
 
 describe('scheduleLabel', () => {

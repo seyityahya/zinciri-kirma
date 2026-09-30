@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, Flame, Pencil, RotateCcw, Trash2 } from 'lucide-react-native';
+import { Check, Flame, Pencil, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react-native';
 import { useMemo, useRef } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
@@ -30,8 +30,9 @@ export default function HabitDetailScreen() {
   const ready = useHabitStore((s) => s.ready);
   const chainScroll = useRef<ScrollView>(null);
 
-  const status = useMemo(() => (habit ? computeStatus(habit, today) : null), [habit, today]);
-  const slots = useMemo(() => (habit ? recentSlots(habit, today, 21) : []), [habit, today]);
+  const grace = useHabitStore((s) => s.data.settings.grace);
+  const status = useMemo(() => (habit ? computeStatus(habit, today, grace) : null), [habit, today, grace]);
+  const slots = useMemo(() => (habit ? recentSlots(habit, today, 21, grace) : []), [habit, today, grace]);
 
   if (!habit || !status) {
     return (
@@ -154,6 +155,34 @@ export default function HabitDetailScreen() {
           <Stat label="Başarı" value={rate} />
         </View>
 
+        {grace && status.state !== 'new' && status.state !== 'broken' ? (
+          <View
+            style={[
+              styles.grace,
+              { backgroundColor: status.graceUsed ? colors.warningSoft : colors.surfaceAlt },
+            ]}
+          >
+            <ShieldCheck size={20} color={status.graceUsed ? colors.warning : colors.success} strokeWidth={2.4} />
+            <Txt variant="callout" tone="secondary" style={{ flex: 1 }}>
+              {status.graceUsed ? (
+                <>
+                  <Txt variant="callout" color={colors.warning} weight="700">
+                    Hata payını kullandın.{' '}
+                  </Txt>
+                  Zincir sağlam ama {status.graceRenewIn} halka boyunca bir daha kaçırırsan kırılır.
+                </>
+              ) : (
+                <>
+                  <Txt variant="callout" weight="700">
+                    Hata payın hazır.{' '}
+                  </Txt>
+                  Art arda 7 halkada 1 kez kaçırmak zinciri kırmaz.
+                </>
+              )}
+            </Txt>
+          </View>
+        ) : null}
+
         <SectionTitle>Son halkalar</SectionTitle>
         <Card style={{ paddingVertical: 18 }}>
           <ScrollView
@@ -176,7 +205,7 @@ export default function HabitDetailScreen() {
         <View style={{ height: 24 }} />
         <SectionTitle>Takvim</SectionTitle>
         <Card>
-          <MonthCalendar habit={habit} today={today} onToggle={toggleDay} />
+          <MonthCalendar habit={habit} today={today} grace={grace} onToggle={toggleDay} />
         </Card>
         <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 10 }}>
           Unuttuğun bir günü işaretlemek ya da düzeltmek için takvimde güne dokun.
@@ -257,6 +286,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginTop: 14,
+    marginBottom: 24,
+  },
+  grace: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.lg,
+    marginTop: -10,
     marginBottom: 24,
   },
   stat: {

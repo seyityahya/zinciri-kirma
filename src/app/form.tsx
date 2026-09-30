@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChainRow } from '@/components/chain-links';
 import { ColorPicker, DayPicker, EmojiGrid, OptionRow, Stepper } from '@/components/form-controls';
 import { EmojiBadge, IconButton, PrimaryButton, SectionTitle, Txt } from '@/components/ui';
+import { usePrefs } from '@/data/prefs';
 import { useHabit, useHabitStore } from '@/data/store';
 import type { Weekday } from '@/domain/dates';
 import { ALL_DAYS, scheduleExplanation, scheduleLabel, WORK_DAYS } from '@/domain/labels';
@@ -22,6 +23,7 @@ import { findPreset } from '@/domain/presets';
 import { type Habit, NAME_MAX_LENGTH, type Schedule, SCHEDULE_LIMITS } from '@/domain/types';
 import { haptic } from '@/lib/haptics';
 import { useKeyboardOverlap } from '@/lib/use-keyboard-overlap';
+import { requestNotificationPermission, syncReminders } from '@/notifications/reminders';
 import { HABIT_COLORS, onColor, radius, useTheme, withAlpha } from '@/theme';
 
 type Mode = 'daily' | 'weekdays' | 'custom' | 'interval' | 'weekly';
@@ -114,6 +116,7 @@ function HabitForm({ existing, preset }: { existing: Habit | undefined; preset: 
     if (!valid) return;
     const input = { name: trimmed, emoji: state.emoji, color: state.color, schedule };
     const store = useHabitStore.getState();
+    const isFirst = store.data.habits.length === 0;
     if (existing) {
       void store.updateHabit(existing.id, input);
     } else {
@@ -121,6 +124,15 @@ function HabitForm({ existing, preset }: { existing: Habit | undefined; preset: 
     }
     haptic.success();
     router.back();
+    // İlk zincirden sonra akşam hatırlatması için izin iste (modal kapandıktan sonra).
+    if (!existing && isFirst && store.data.settings.reminder.enabled) {
+      usePrefs.getState().update({ notificationAsked: true });
+      setTimeout(() => {
+        void requestNotificationPermission().then((granted) => {
+          if (granted) void syncReminders(useHabitStore.getState().data);
+        });
+      }, 700);
+    }
   };
 
   const remove = () => {

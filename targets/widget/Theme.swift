@@ -4,6 +4,11 @@ import UIKit
 enum ZKTheme {
   static let flame = Color(hex: "#FF6B3D")
   static let danger = Color(hex: "#E5484D")
+  static let warning = Color(UIColor { trait in
+    trait.userInterfaceStyle == .dark
+      ? UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
+      : UIColor(red: 0.878, green: 0.541, blue: 0, alpha: 1)
+  })
 
   static let background = Color(UIColor { trait in
     trait.userInterfaceStyle == .dark

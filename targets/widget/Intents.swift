@@ -72,10 +72,14 @@ struct ToggleHabitIntent: AppIntent {
   }
 
   func perform() async throws -> some IntentResult {
-    let today = DayMath.key(DayMath.today())
+    let now = Date()
+    let settings = SharedStore.snapshot(now: now).settings
+    let today = DayMath.key(DayMath.today(now, dayStartHour: settings.dayStartHour))
     if day == nil || day == today {
-      SharedStore.toggleToday(habitId: habitId)
+      SharedStore.toggleToday(habitId: habitId, now: now)
     }
+    // Akşam hatırlatmasını güncel duruma göre yeniden kur (ör. hepsi bittiyse bugünü iptal et).
+    await ReminderScheduler.sync(SharedStore.snapshot(now: now), now: now)
     WidgetCenter.shared.reloadAllTimelines()
     return .result()
   }

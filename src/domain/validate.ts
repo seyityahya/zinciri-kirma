@@ -1,7 +1,9 @@
 import { isValidDayKey, todayKey, type DayKey, type Weekday } from './dates';
 import {
   type AppData,
+  type AppSettings,
   DATA_VERSION,
+  defaultSettings,
   emptyData,
   type Habit,
   NAME_MAX_LENGTH,
@@ -69,6 +71,21 @@ export function normalizeHabit(value: unknown, today: DayKey = todayKey()): Habi
   };
 }
 
+export function normalizeSettings(value: unknown): AppSettings {
+  const d = defaultSettings();
+  const v = (value ?? {}) as Record<string, unknown>;
+  const r = (v.reminder ?? {}) as Record<string, unknown>;
+  return {
+    dayStartHour: clampInt(v.dayStartHour, 0, 6, d.dayStartHour),
+    grace: typeof v.grace === 'boolean' ? v.grace : d.grace,
+    reminder: {
+      enabled: typeof r.enabled === 'boolean' ? r.enabled : d.reminder.enabled,
+      hour: clampInt(r.hour, 0, 23, d.reminder.hour),
+      minute: clampInt(r.minute, 0, 59, d.reminder.minute),
+    },
+  };
+}
+
 /** Saklanan (ya da widget'ın yazdığı) JSON'u güvenle AppData'ya çevirir. */
 export function parseAppData(json: string | null | undefined): AppData | null {
   if (!json) return null;
@@ -95,6 +112,7 @@ export function parseAppData(json: string | null | undefined): AppData | null {
     ...emptyData(),
     version: DATA_VERSION,
     habits,
+    settings: normalizeSettings(v.settings),
     updatedAt: typeof v.updatedAt === 'number' && Number.isFinite(v.updatedAt) ? v.updatedAt : 0,
   };
 }

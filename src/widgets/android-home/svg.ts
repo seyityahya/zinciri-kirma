@@ -34,7 +34,7 @@ export const MINI_LINK = { w: 13, h: 8, step: 10, stroke: 2.2 };
 export function miniChainSvg(
   slots: ChainSlot[],
   /** `empty`: düz renk; saydamlığı SVG içinde verilir. */
-  colors: { tint: string; danger: string; empty: string },
+  colors: { tint: string; danger: string; warning: string; empty: string },
 ): { svg: string; width: number; height: number } {
   const { w, h, step, stroke } = MINI_LINK;
   const pad = stroke / 2;
@@ -49,6 +49,8 @@ export function miniChainSvg(
           return `<path d="${d}" fill="none" stroke="${colors.tint}" stroke-width="${stroke}"/>`;
         case 'missed':
           return `<path d="${d}" fill="none" stroke="${colors.danger}" stroke-width="${stroke}" stroke-dasharray="7 3" opacity="0.85"/>`;
+        case 'forgiven':
+          return `<path d="${d}" fill="none" stroke="${colors.warning}" stroke-width="${stroke}"/>`;
         case 'pending':
           return `<path d="${d}" fill="none" stroke="${colors.tint}" stroke-width="${stroke}" stroke-dasharray="2.4 1.8" opacity="0.6"/>`;
         default:

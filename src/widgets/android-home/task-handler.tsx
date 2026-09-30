@@ -1,8 +1,8 @@
 'use no memo';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 
-import { flushStore, useHabitStore } from '@/data/store';
-import { todayKey } from '@/domain/dates';
+import { dayNow, flushStore, useHabitStore } from '@/data/store';
+import { flushReminderSync } from '@/notifications/reminders';
 
 import { renderFor, setWidgetHabit, updateAllWidgets } from './render';
 
@@ -22,14 +22,16 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
       return;
 
     case 'WIDGET_CLICK': {
-      store.setToday(todayKey());
+      store.setToday(dayNow());
       const shownDay = clickActionData?.day;
       // Widget gece yarısından sonra henüz yenilenmediyse dünü gösteriyordur:
       // yanlış günü işaretlemek yerine önce güncel hâliyle yeniden çiz.
-      const stale = typeof shownDay === 'string' && shownDay !== todayKey();
+      const stale = typeof shownDay === 'string' && shownDay !== dayNow();
       if (clickAction === 'TOGGLE' && typeof clickActionData?.habitId === 'string' && !stale) {
         useHabitStore.getState().toggleToday(clickActionData.habitId);
         await flushStore();
+        // Arka plan görevi bitmeden akşam hatırlatmasını da güncelle.
+        await flushReminderSync();
       } else if (stale) {
         await store.refresh();
         await updateAllWidgets(useHabitStore.getState().data);
@@ -42,7 +44,7 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
     case 'WIDGET_RESIZED':
     default:
       // Uygulama kapalıyken gün değişmiş olabilir.
-      store.setToday(todayKey());
+      store.setToday(dayNow());
       await store.refresh();
       break;
   }

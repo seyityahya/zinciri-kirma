@@ -111,6 +111,20 @@ export const ChainLink = memo(function ChainLink({ state, tint, size, progress }
         </>
       );
       break;
+    case 'forgiven':
+      // Hata payıyla geçilen halka: zincir kopmadı ama "yamalı", turuncu.
+      content = (
+        <>
+          <Path d={stadium(x, y, iw, ih)} stroke={colors.warning} strokeWidth={stroke} fill="none" />
+          <Path
+            d={`M ${x + iw / 2 - stroke * 0.9} ${y + ih / 2} H ${x + iw / 2 + stroke * 0.9}`}
+            stroke={colors.warning}
+            strokeWidth={stroke * 0.8}
+            strokeLinecap="round"
+          />
+        </>
+      );
+      break;
     default:
       content = <Path d={stadium(x, y, iw, ih)} stroke={colors.emptyLink} strokeWidth={stroke} fill="none" />;
   }
@@ -154,7 +168,8 @@ export const ChainRow = memo(function ChainRow({ slots, tint, size = 'sm', style
 function describe(slots: ChainSlot[]): string {
   const done = slots.filter((s) => s.state === 'done').length;
   const missed = slots.filter((s) => s.state === 'missed').length;
-  return `Son ${slots.length} halkanın ${done} tanesi tamam${missed > 0 ? `, ${missed} tanesi kırık` : ''}`;
+  const forgiven = slots.filter((s) => s.state === 'forgiven').length;
+  return `Son ${slots.length} halkanın ${done} tanesi tamam${forgiven > 0 ? `, ${forgiven} tanesi hata payıyla geçildi` : ''}${missed > 0 ? `, ${missed} tanesi kırık` : ''}`;
 }
 
 const styles = StyleSheet.create({

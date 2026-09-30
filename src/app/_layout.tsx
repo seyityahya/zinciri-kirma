@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { usePrefs } from '@/data/prefs';
 import { useHabitStore } from '@/data/store';
 import { useDayAndSync } from '@/lib/use-today';
+import { requestNotificationPermission, syncReminders } from '@/notifications/reminders';
 import { useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -29,6 +30,21 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (ready && prefsLoaded) SplashScreen.hideAsync().catch(() => {});
+  }, [ready, prefsLoaded]);
+
+  // Zinciri olan ve hatırlatması açık kullanıcıya bildirim iznini bir kez sor
+  // (ilk zinciri oluştururken sorulmamışsa, ör. güncellemeden sonra).
+  useEffect(() => {
+    if (!ready || !prefsLoaded) return;
+    const { data } = useHabitStore.getState();
+    if (usePrefs.getState().notificationAsked || !data.settings.reminder.enabled || data.habits.length === 0) return;
+    usePrefs.getState().update({ notificationAsked: true });
+    const timer = setTimeout(() => {
+      void requestNotificationPermission().then((granted) => {
+        if (granted) void syncReminders(useHabitStore.getState().data);
+      });
+    }, 1200);
+    return () => clearTimeout(timer);
   }, [ready, prefsLoaded]);
 
   useDayAndSync();

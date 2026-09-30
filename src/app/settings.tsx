@@ -1,14 +1,47 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { Check, Flame, FlaskConical, Monitor, Moon, Plus, Sun, Trash2 } from 'lucide-react-native';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Bell,
+  BellRing,
+  Check,
+  Flame,
+  FlaskConical,
+  Minus,
+  Monitor,
+  Moon,
+  Plus,
+  ShieldCheck,
+  Sun,
+  Trash2,
+} from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Alert,
+  AppState,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { requestPinWidget } from 'react-native-android-widget';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton, Card, PrimaryButton, SectionTitle, Txt } from '@/components/ui';
 import { demoHabits } from '@/data/demo';
 import { type ThemePreference, usePrefs } from '@/data/prefs';
-import { useHabitStore } from '@/data/store';
+import { dayNow, useHabitStore } from '@/data/store';
+import { longDateLabel } from '@/domain/labels';
+import { DAY_START_HOURS } from '@/domain/types';
+import {
+  notificationPermission,
+  type PermissionState,
+  requestNotificationPermission,
+  syncReminders,
+} from '@/notifications/reminders';
 import { haptic } from '@/lib/haptics';
 import { radius, roundedFont, useTheme, withAlpha } from '@/theme';
 
@@ -27,8 +60,8 @@ const IOS_STEPS = [
 
 const ANDROID_STEPS = [
   'Ana ekranda boş bir yere basılı tut ve “Widget’lar”a dokun.',
-  '“Zinciri Kırma”yı bul; “Tek Zincir” ya da “Bugün” widget’ını ana ekrana sürükle.',
-  'Tek Zincir widget’ını eklerken göstermek istediğin zinciri seç.',
+  '“Zinciri Kırma”yı bul; “Tek Zincir”, “Mini Zincir” ya da “Bugün” widget’ını ana ekrana sürükle.',
+  'Tek/Mini Zincir widget’ına basılı tutup ayarlarından göstermek istediğin zinciri seçebilirsin.',
 ];
 
 export default function SettingsScreen() {
@@ -37,7 +70,50 @@ export default function SettingsScreen() {
   const theme = usePrefs((s) => s.theme);
   const haptics = usePrefs((s) => s.haptics);
   const count = useHabitStore((s) => s.data.habits.length);
+  const settings = useHabitStore((s) => s.data.settings);
+  const today = useHabitStore((s) => s.today);
   const steps = Platform.OS === 'android' ? ANDROID_STEPS : IOS_STEPS;
+  const [permission, setPermission] = useState<PermissionState>('undetermined');
+
+  const loadPermission = useCallback(() => {
+    void notificationPermission().then(setPermission);
+  }, []);
+
+  useEffect(() => {
+    loadPermission();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') loadPermission();
+    });
+    return () => sub.remove();
+  }, [loadPermission]);
+
+  const setReminderEnabled = async (enabled: boolean) => {
+    haptic.selection();
+    await useHabitStore.getState().updateSettings({ reminder: { enabled } });
+    if (enabled) {
+      const granted = await requestNotificationPermission();
+      loadPermission();
+      if (granted) await syncReminders(useHabitStore.getState().data);
+      else {
+        Alert.alert('Bildirim izni kapalı', 'Hatırlatma gönderebilmem için bildirimlere izin vermelisin.', [
+          { text: 'Vazgeç', style: 'cancel' },
+          { text: 'Ayarları aç', onPress: () => void Linking.openSettings() },
+        ]);
+      }
+    }
+  };
+
+  const shiftReminder = (deltaMinutes: number) => {
+    const { hour, minute } = settings.reminder;
+    const total = Math.min(23 * 60 + 30, Math.max(17 * 60, hour * 60 + minute + deltaMinutes));
+    if (total === hour * 60 + minute) return;
+    haptic.selection();
+    void useHabitStore.getState().updateSettings({
+      reminder: { hour: Math.floor(total / 60), minute: total % 60 },
+    });
+  };
+
+  const reminderLabel = `${String(settings.reminder.hour).padStart(2, '0')}:${String(settings.reminder.minute).padStart(2, '0')}`;
 
   const pin = async (widgetName: string) => {
     const ok = await requestPinWidget({ widgetName }).catch(() => false);
@@ -71,7 +147,10 @@ export default function SettingsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
+      >
         <SectionTitle>Widget</SectionTitle>
         <Card>
           <View style={styles.widgetHero}>
@@ -79,7 +158,8 @@ export default function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Txt variant="headline">Uygulamayı açmadan işaretle</Txt>
               <Txt variant="callout" tone="secondary" style={{ marginTop: 4 }}>
-                Widget’taki düğmeye dokunduğunda o günün halkası eklenir, zincirinin kaç gündür sürdüğünü de hep görürsün.
+                Widget’taki düğmeye dokunduğunda o günün halkası eklenir, zincirinin kaç gündür sürdüğünü de hep
+                görürsün.
               </Txt>
             </View>
           </View>
@@ -97,15 +177,178 @@ export default function SettingsScreen() {
             </View>
           ))}
           {Platform.OS === 'android' ? (
-            <View style={styles.pinRow}>
-              <View style={{ flex: 1 }}>
-                <PrimaryButton label="Tek Zincir" icon={Plus} onPress={() => pin('HabitWidget')} variant="soft" />
+            <>
+              <View style={styles.pinRow}>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton label="Tek Zincir" icon={Plus} onPress={() => pin('HabitWidget')} variant="soft" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton label="Bugün" icon={Plus} onPress={() => pin('TodayWidget')} variant="soft" />
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <PrimaryButton label="Bugün" icon={Plus} onPress={() => pin('TodayWidget')} variant="soft" />
+              <View style={[styles.pinRow, { marginTop: 10 }]}>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton
+                    label="Mini Zincir (2×1)"
+                    icon={Plus}
+                    onPress={() => pin('HabitMiniWidget')}
+                    variant="soft"
+                  />
+                </View>
               </View>
-            </View>
+            </>
           ) : null}
+        </Card>
+
+        <View style={styles.gap} />
+        <SectionTitle>Hatırlatma</SectionTitle>
+        <Card>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: withAlpha(colors.brand, 0.14) }]}>
+              <BellRing size={18} color={colors.brand} strokeWidth={2.4} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt variant="headline">Akşam hatırlatması</Txt>
+              <Txt variant="caption" tone="secondary" style={{ marginTop: 2 }}>
+                O gün yapmadığın zincirler için günde tek bir bildirim. Hepsi tamamsa gelmez.
+              </Txt>
+            </View>
+            <Switch
+              value={settings.reminder.enabled}
+              onValueChange={(v) => void setReminderEnabled(v)}
+              trackColor={{ true: colors.brand, false: colors.track }}
+              thumbColor={Platform.OS === 'android' ? colors.surface : undefined}
+              accessibilityLabel="Akşam hatırlatması"
+              testID="reminder-toggle"
+            />
+          </View>
+          {settings.reminder.enabled ? (
+            <>
+              <View style={[styles.divider, { backgroundColor: colors.separator }]} />
+              <View style={styles.row}>
+                <Txt variant="callout" weight="600" style={{ flex: 1 }}>
+                  Saat
+                </Txt>
+                <View style={[styles.timeStepper, { backgroundColor: colors.surfaceAlt }]}>
+                  <Pressable
+                    onPress={() => shiftReminder(-30)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Daha erken"
+                    style={[styles.timeButton, { backgroundColor: colors.surface }]}
+                  >
+                    <Minus size={16} color={colors.text} strokeWidth={2.6} />
+                  </Pressable>
+                  <Text
+                    style={[styles.timeText, { color: colors.text }]}
+                    accessibilityLabel={`Hatırlatma saati ${reminderLabel}`}
+                  >
+                    {reminderLabel}
+                  </Text>
+                  <Pressable
+                    onPress={() => shiftReminder(30)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Daha geç"
+                    style={[styles.timeButton, { backgroundColor: colors.surface }]}
+                  >
+                    <Plus size={16} color={colors.text} strokeWidth={2.6} />
+                  </Pressable>
+                </View>
+              </View>
+              {Platform.OS === 'android' && permission !== 'denied' ? (
+                <Pressable
+                  onPress={() => void Linking.openSettings()}
+                  accessibilityRole="button"
+                  style={[styles.notice, { backgroundColor: colors.surfaceAlt }]}
+                >
+                  <Bell size={16} color={colors.textSecondary} />
+                  <Txt variant="caption" tone="secondary" style={{ flex: 1 }}>
+                    Tam saatinde gelsin mi? Uygulama ayarlarında “Alarmlar ve hatırlatıcılar” iznini aç.
+                  </Txt>
+                </Pressable>
+              ) : null}
+              {permission === 'denied' ? (
+                <Pressable
+                  onPress={() => void Linking.openSettings()}
+                  style={[styles.notice, { backgroundColor: colors.warningSoft }]}
+                >
+                  <Bell size={16} color={colors.warning} />
+                  <Txt variant="caption" color={colors.warning} weight="600" style={{ flex: 1 }}>
+                    Bildirim izni kapalı. Açmak için dokun.
+                  </Txt>
+                </Pressable>
+              ) : null}
+            </>
+          ) : null}
+        </Card>
+
+        <View style={styles.gap} />
+        <SectionTitle>Zincir kuralları</SectionTitle>
+        <Card>
+          <Txt variant="headline">Gün bitişi</Txt>
+          <Txt variant="caption" tone="secondary" style={{ marginTop: 2, marginBottom: 12 }}>
+            Gece geç saatte işaretlediklerin önceki güne sayılır. Şu an: {longDateLabel(today)}
+          </Txt>
+          <View style={styles.hours} accessibilityRole="radiogroup">
+            {DAY_START_HOURS.map((hour) => {
+              const selected = settings.dayStartHour === hour;
+              return (
+                <Pressable
+                  key={hour}
+                  onPress={() => {
+                    haptic.selection();
+                    void useHabitStore.getState().updateSettings({ dayStartHour: hour });
+                    useHabitStore.getState().setToday(dayNow({ ...settings, dayStartHour: hour }));
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`Gün ${hour === 0 ? 'gece yarısı' : `saat ${hour}`} bitsin`}
+                  style={[
+                    styles.hour,
+                    {
+                      backgroundColor: selected ? colors.brand : colors.surfaceAlt,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.hourText,
+                      {
+                        color: selected ? colors.onBrand : colors.textSecondary,
+                      },
+                    ]}
+                    allowFontScaling={false}
+                  >
+                    {String(hour).padStart(2, '0')}:00
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.separator }]} />
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: colors.warningSoft }]}>
+              <ShieldCheck size={18} color={colors.warning} strokeWidth={2.4} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt variant="headline">Hata payı</Txt>
+              <Txt variant="caption" tone="secondary" style={{ marginTop: 2 }}>
+                Art arda 7 halkada 1 kez kaçırmak zinciri kırmaz; o halka turuncu görünür ve seni uyarırım.
+              </Txt>
+            </View>
+            <Switch
+              value={settings.grace}
+              onValueChange={(grace) => {
+                haptic.selection();
+                void useHabitStore.getState().updateSettings({ grace });
+              }}
+              trackColor={{ true: colors.brand, false: colors.track }}
+              thumbColor={Platform.OS === 'android' ? colors.surface : undefined}
+              accessibilityLabel="Hata payı"
+              testID="grace-toggle"
+            />
+          </View>
         </Card>
 
         <View style={styles.gap} />
@@ -126,7 +369,12 @@ export default function SettingsScreen() {
                 accessibilityLabel={option.label}
                 style={[
                   styles.segmentItem,
-                  selected ? { backgroundColor: colors.surface, shadowColor: colors.shadow } : null,
+                  selected
+                    ? {
+                        backgroundColor: colors.surface,
+                        shadowColor: colors.shadow,
+                      }
+                    : null,
                   selected ? styles.segmentSelected : null,
                 ]}
               >
@@ -166,8 +414,9 @@ export default function SettingsScreen() {
           <View style={styles.method}>
             <Flame size={22} color={colors.flame} fill={colors.flame} />
             <Txt variant="callout" tone="secondary" style={{ flex: 1 }}>
-              Hedefini her yaptığında zincirine bir halka ekle. Birkaç gün sonra bir zincirin olur ve tek işin onu kırmamaktır.
-              Planlı olmayan günler zinciri kırmaz; kaçırdığın bir gün ise zinciri yeniden başlatır.
+              Hedefini her yaptığında zincirine bir halka ekle. Birkaç gün sonra bir zincirin olur ve tek işin onu
+              kırmamaktır. Planlı olmayan günler zinciri kırmaz. Hata payı açıksa art arda 7 halkada 1 kaçırma
+              affedilir; ikincisi zinciri yeniden başlatır.
             </Txt>
           </View>
         </Card>
@@ -189,7 +438,11 @@ export default function SettingsScreen() {
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.danger,
-            { backgroundColor: pressed ? colors.dangerSoft : colors.surface, borderColor: colors.border, opacity: count === 0 ? 0.5 : 1 },
+            {
+              backgroundColor: pressed ? colors.dangerSoft : colors.surface,
+              borderColor: colors.border,
+              opacity: count === 0 ? 0.5 : 1,
+            },
           ]}
         >
           <Trash2 size={18} color={colors.danger} />
@@ -198,6 +451,28 @@ export default function SettingsScreen() {
           </Txt>
         </Pressable>
 
+        {__DEV__ ? (
+          <View style={{ marginTop: 10 }}>
+            <PrimaryButton
+              label="Geliştirici: 1 dk sonra hatırlat"
+              icon={Bell}
+              variant="soft"
+              testID="dev-reminder"
+              onPress={async () => {
+                const at = new Date(Date.now() + 60_000);
+                await useHabitStore.getState().updateSettings({
+                  reminder: {
+                    enabled: true,
+                    hour: at.getHours(),
+                    minute: at.getMinutes(),
+                  },
+                });
+                if (await requestNotificationPermission()) await syncReminders(useHabitStore.getState().data);
+                haptic.success();
+              }}
+            />
+          </View>
+        ) : null}
         {__DEV__ ? (
           <View style={{ marginTop: 10 }}>
             <PrimaryButton
@@ -332,6 +607,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  rowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 5,
+    borderRadius: radius.lg,
+  },
+  timeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeText: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: roundedFont,
+    fontVariant: ['tabular-nums'],
+    minWidth: 58,
+    textAlign: 'center',
+  },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: radius.md,
+  },
+  hours: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  hour: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hourText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   method: {
     flexDirection: 'row',

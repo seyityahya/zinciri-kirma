@@ -1,35 +1,51 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
-import { useHabitStore } from '@/data/store';
-import { nextLocalMidnight, todayKey } from '@/domain/dates';
+import { dayNow, useHabitStore } from '@/data/store';
+import { nextDayBoundary } from '@/domain/dates';
+import { scheduleReminderSync } from '@/notifications/reminders';
+import { syncWidgets } from '@/widgets/sync';
+
+/** Diskten tazele; widget'ları ve hatırlatmaları güncel güne göre yeniden kur. */
+function refreshEverything() {
+  useHabitStore.getState().setToday(dayNow());
+  void useHabitStore
+    .getState()
+    .refresh()
+    .then(() => {
+      const { data, ready } = useHabitStore.getState();
+      if (!ready) return;
+      syncWidgets(data);
+      scheduleReminderSync(data);
+    });
+}
 
 /**
- * Uygulama açıkken gün değişimini (gece yarısı) ve öne gelmeyi takip eder;
- * öne gelince widget'ın yaptığı değişiklikleri de diskten okur.
+ * Uygulama açıkken gün değişimini (ayardaki saat, varsayılan 03:00) ve öne gelmeyi
+ * takip eder; öne gelince widget'ın yaptığı değişiklikleri de diskten okur.
  */
 export function useDayAndSync(): void {
+  const dayStartHour = useHabitStore((s) => s.data.settings.dayStartHour);
+
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const schedule = () => {
       if (timer) clearTimeout(timer);
       const now = new Date();
-      const wait = Math.max(1000, nextLocalMidnight(now).getTime() - now.getTime() + 500);
+      const wait = Math.max(1000, nextDayBoundary(now, dayStartHour).getTime() - now.getTime() + 500);
       timer = setTimeout(() => {
-        useHabitStore.getState().setToday(todayKey());
+        refreshEverything();
         schedule();
       }, wait);
     };
 
     // Android'de JS ortamını widget önceden başlatmış olabilir; açılışta günü ve veriyi tazele.
-    useHabitStore.getState().setToday(todayKey());
-    void useHabitStore.getState().refresh();
+    refreshEverything();
     schedule();
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        useHabitStore.getState().setToday(todayKey());
-        void useHabitStore.getState().refresh();
+        refreshEverything();
         schedule();
       }
     });
@@ -38,5 +54,5 @@ export function useDayAndSync(): void {
       if (timer) clearTimeout(timer);
       sub.remove();
     };
-  }, []);
+  }, [dayStartHour]);
 }

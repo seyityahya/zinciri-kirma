@@ -92,6 +92,22 @@ export function dayKeyToLocalDate(key: DayKey): Date {
   return new Date(year, month - 1, day);
 }
 
+/**
+ * "Mantıksal" bugün: gün, gece yarısı yerine `dayStartHour` saatinde biter.
+ * Ör. dayStartHour = 3 iken gece 01:30'da hâlâ önceki gün sayılır.
+ */
+export function logicalDayKey(now: Date, dayStartHour: number): DayKey {
+  const key = toDayKey(now);
+  return now.getHours() < dayStartHour ? addDays(key, -1) : key;
+}
+
+/** Bir sonraki gün değişim anı (yerel `dayStartHour`:00). */
+export function nextDayBoundary(now: Date, dayStartHour: number): Date {
+  const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), dayStartHour, 0, 0, 0);
+  if (candidate.getTime() > now.getTime()) return candidate;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, dayStartHour, 0, 0, 0);
+}
+
 /** Verilen andan sonraki ilk yerel gece yarısı. */
 export function nextLocalMidnight(now: Date): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);

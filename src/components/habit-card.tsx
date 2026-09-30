@@ -15,7 +15,9 @@ import { EmojiBadge, ScalePressable, StreakPill, Txt } from './ui';
 
 export function statusTone(status: HabitStatus, colors: Palette): string {
   if (status.doneToday) return colors.success;
-  if (status.state === 'broken' || status.weekLost) return colors.danger;
+  if (status.state === 'broken') return colors.danger;
+  if (status.weekLost) return status.graceAvailable ? colors.warning : colors.danger;
+  if (status.graceUsed) return colors.warning;
   if (status.dueToday) return colors.brand;
   return colors.textSecondary;
 }
@@ -30,9 +32,10 @@ interface Props {
 export const HabitCard = memo(function HabitCard({ habit, today, onOpen, onLongPress }: Props) {
   const { colors, scheme } = useTheme();
   const [chainWidth, setChainWidth] = useState(0);
-  const status = useMemo(() => computeStatus(habit, today), [habit, today]);
+  const grace = useHabitStore((s) => s.data.settings.grace);
+  const status = useMemo(() => computeStatus(habit, today, grace), [habit, today, grace]);
   const count = chainWidth > 0 ? Math.min(14, linksThatFit(chainWidth, 'sm')) : 7;
-  const slots = useMemo(() => recentSlots(habit, today, count), [habit, today, count]);
+  const slots = useMemo(() => recentSlots(habit, today, count, grace), [habit, today, count, grace]);
   const text = statusText(habit.schedule, status, today);
 
   const toggle = () => {

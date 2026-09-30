@@ -30,7 +30,16 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
     },
     "web": {
       "output": "single",
@@ -78,6 +87,21 @@
               "previewImage": "./assets/widget-preview/android-habit.png"
             },
             {
+              "name": "HabitMiniWidget",
+              "label": "Mini Zincir",
+              "description": "Tek zincir, ince şerit: seri ve işaret düğmesi",
+              "minWidth": "110dp",
+              "minHeight": "40dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 1,
+              "maxResizeWidth": "420dp",
+              "maxResizeHeight": "110dp",
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable",
+              "updatePeriodMillis": 1800000,
+              "previewImage": "./assets/widget-preview/android-mini.png"
+            },
+            {
               "name": "TodayWidget",
               "label": "Bugün",
               "description": "Bugünkü tüm zincirlerin tek bakışta",
@@ -92,6 +116,13 @@
               "previewImage": "./assets/widget-preview/android-today.png"
             }
           ]
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#FF5A36"
         }
       ],
       "@bacons/apple-targets",

@@ -25,7 +25,7 @@ export function WidgetConfigScreen({ widgetInfo, renderWidget, setResult }: Widg
   const choose = async (habitId: string) => {
     setSelected(habitId);
     await setWidgetHabit(widgetInfo.widgetId, habitId);
-    renderWidget(habitWidget(habits.find((h) => h.id === habitId)));
+    renderWidget(habitWidget(habits.find((h) => h.id === habitId), useHabitStore.getState().data, widgetInfo.widgetName));
     setResult('ok');
   };
 

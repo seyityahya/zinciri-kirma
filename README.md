@@ -5,8 +5,12 @@ Ana ekran widget'ı sayesinde uygulamayı açmadan tek dokunuşla işaretleyebil
 zincirinin kaç gündür sürdüğünü her an görebilirsin.
 
 - **Sıklıklar:** her gün, hafta içi, belirli günler (ör. Pzt/Çar/Cum), birkaç günde bir (ör. 2 günde bir), haftada N kez
+- **Hata payı:** art arda 7 halkada 1 kaçırma zinciri kırmaz; o halka turuncu görünür ve uyarı verilir
+- **Gün bitişi:** gün varsayılan olarak gece 03:00'te biter (geç yatanlar için); ayarlardan değiştirilebilir
+- **Akşam hatırlatması:** o gün yapılmamış zincirler için günde tek bir toplu bildirim (varsayılan 21:00)
 - **Widget'lar (iOS + Android):**
-  - **Tek Zincir** (küçük): seçtiğin zincir, seri sayısı, son halkalar ve "Yaptım" düğmesi
+  - **Tek Zincir** (2×2): seçtiğin zincir, tarih, seri sayısı, son halkalar ve "Yaptım" düğmesi
+  - **Mini Zincir** (Android, 2×1): ince şerit hâlinde ad, seri, tarih ve işaret düğmesi
   - **Bugün** (orta/büyük): tüm zincirler, bugünkü ilerleme ve her biri için işaretleme düğmesi
   - iOS'ta ayrıca kilit ekranı widget'ları (yuvarlak, dikdörtgen, satır içi)
 - Takvimden geçmiş günleri işaretleme/düzeltme, en uzun seri, toplam, başarı oranı
@@ -55,6 +59,19 @@ npm run android    # Android emülatör/cihazda derler ve açar
 
 Bugün henüz yapılmadıysa zincir kırılmaz, "bugün yap" durumunda bekler.
 
+**Hata payı (ayarlardan kapatılabilir):** Her beklenen halka (gün, kez ya da haftalık hedefin her tekrarı) sırayla
+değerlendirilir. İki kaçırma arasında en az 7 halka varsa kaçırma affedilir: zincir sürer ama o halka sayılmaz ve
+turuncu görünür. Daha sık kaçırılırsa zincir kırılır. Örnek: haftada 3 kez hedefiyle 4 haftada 11 kez yapmak zinciri
+korur, 9 kez yapmak kırar.
+
+**Gün bitişi:** Gün, ayardaki saatte (varsayılan 03:00) biter. Gece 01:30'da işaretlediğin şey önceki güne sayılır;
+uygulama, widget'lar ve bildirimler aynı "bugün"ü kullanır.
+
+**Hatırlatma:** Her akşam seçtiğin saatte, o gün bekleyen zincirler tek bildirimde toplanır ("Bugün 3 zincir seni
+bekliyor"). Hepsini yaptıysan (widget'tan bile) o günün bildirimi iptal edilir. Android 14 ve üstünde
+"Alarmlar ve hatırlatıcılar" izni kapalıysa sistem bildirimi bir saate kadar geciktirebilir; tam saatinde gelmesi
+için Ayarlar → Hatırlatma'daki kısayoldan bu izni açabilirsin.
+
 ## Mimari
 
 ```
@@ -63,7 +80,8 @@ src/
   components/     Zincir halkaları, kart, takvim, form parçaları
   domain/         Saf mantık: tarih, seri hesabı, Türkçe metinler, doğrulama
   data/           Zustand deposu ve kalıcılık (widget'la paylaşılan depo)
-  widgets/        Android widget'ları (JSX) ve widget senkronu
+  notifications/  Akşam hatırlatmalarının planı ve kurulumu
+  widgets/        Android widget'ları (android-home/, JSX) ve widget senkronu
 targets/widget/   iOS widget'ı (SwiftUI + WidgetKit + AppIntents)
 plugins/          Yerel Expo config eklentisi
 ```
@@ -91,6 +109,14 @@ npm run typecheck    # TypeScript
 npm run lint         # ESLint
 npm run verify       # Hepsi
 ```
+
+## Notlar
+
+- **Android widget'larında tıklama:** react-native-android-widget 0.22'de bir widget'taki birden çok tıklanabilir
+  alan birbirinin `PendingIntent`'ini iptal edebiliyor. Bu yüzden her widget'ta liste dışında tek bir düğme var;
+  "Bugün" widget'ının satırları `ListWidget` ile çiziliyor (bunu bir test de denetliyor).
+- **Klasör adı `android` olmamalı:** React Native'in Gradle eklentisi `android/` adlı klasörlerdeki JS dosyalarını
+  paket girdisi saymıyor; bu yüzden Android widget kodu `src/widgets/android-home/` içinde.
 
 ## Not: klasör adı
 

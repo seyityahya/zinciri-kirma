@@ -5,8 +5,9 @@ import Foundation
 enum SharedStore {
   static let appGroup = "group.com.seyit.zincirikirma"
   static let dataKey = "zk.data.v1"
+  static let reminderDebugKey = "zk.reminders.lastSync"
 
-  private static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
+  static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
 
   static func loadRoot() -> [String: Any]? {
     guard let text = defaults?.string(forKey: dataKey),
@@ -16,8 +17,22 @@ enum SharedStore {
     return root
   }
 
-  static func loadHabits(today: Int = DayMath.today()) -> [ZKHabit] {
-    ZKHabit.parseList(loadRoot(), today: today)
+  struct Snapshot {
+    let habits: [ZKHabit]
+    let settings: ZKSettings
+  }
+
+  /// Zincirler ve paylaşılan ayarlar; ayarlar genel "bugün" hesabı için de güncellenir.
+  static func snapshot(now: Date = Date()) -> Snapshot {
+    let root = loadRoot()
+    let settings = ZKSettings(json: root?["settings"])
+    ZKSettings.current = settings
+    let today = DayMath.today(now, dayStartHour: settings.dayStartHour)
+    return Snapshot(habits: ZKHabit.parseList(root, today: today), settings: settings)
+  }
+
+  static func loadHabits() -> [ZKHabit] {
+    snapshot().habits
   }
 
   /// Bir günü işaretler ya da kaldırır. Bilinmeyen alanlara dokunmadan JSON'u günceller.
@@ -52,12 +67,12 @@ enum SharedStore {
     return true
   }
 
-  /// Bugünü tersine çevirir; yeni durumu döndürür.
+  /// Mantıksal bugünü tersine çevirir; yeni durumu döndürür.
   @discardableResult
   static func toggleToday(habitId: String, now: Date = Date()) -> Bool? {
-    let today = DayMath.today(now)
-    let key = DayMath.key(today)
-    guard let habit = loadHabits(today: today).first(where: { $0.id == habitId }) else { return nil }
+    let snap = snapshot(now: now)
+    let key = DayMath.key(DayMath.today(now, dayStartHour: snap.settings.dayStartHour))
+    guard let habit = snap.habits.first(where: { $0.id == habitId }) else { return nil }
     let done = !habit.completions.contains(key)
     return setCompletion(habitId: habitId, day: key, done: done) ? done : nil
   }

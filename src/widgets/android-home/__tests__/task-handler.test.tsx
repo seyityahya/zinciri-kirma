@@ -1,12 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 
-import { __resetStoreForTests, useHabitStore } from '@/data/store';
-import { addDays, todayKey } from '@/domain/dates';
+import { __resetStoreForTests, dayNow, useHabitStore } from '@/data/store';
+import { addDays } from '@/domain/dates';
 
 import { widgetTaskHandler } from '../task-handler';
 
-const today = todayKey();
+const today = dayNow();
 
 async function seed() {
   await AsyncStorage.setItem(

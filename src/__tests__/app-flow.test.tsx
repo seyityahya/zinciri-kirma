@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
-import { __resetStoreForTests, flushStore, useHabitStore } from '@/data/store';
-import { addDays, todayKey } from '@/domain/dates';
+import { __resetStoreForTests, dayNow, flushStore, useHabitStore } from '@/data/store';
+import { addDays } from '@/domain/dates';
 
 const ROUTES = './src/app';
 
@@ -62,8 +62,8 @@ describe('uygulama akışı', () => {
         emoji: '🏃',
         color: '#34C759',
         schedule: { kind: 'days', days: [0, 1, 2, 3, 4, 5, 6] },
-        startDate: addDays(todayKey(), -3),
-        completions: [addDays(todayKey(), -2), addDays(todayKey(), -1)],
+        startDate: addDays(dayNow(), -3),
+        completions: [addDays(dayNow(), -2), addDays(dayNow(), -1)],
         createdAt: 1,
       },
     ]);
@@ -73,17 +73,17 @@ describe('uygulama akışı', () => {
     expect(screen.getByText('Zinciri korumak için bugün yap')).toBeTruthy();
     fireEvent.press(screen.getByTestId('habit-check-a'));
     await settle();
-    expect(useHabitStore.getState().data.habits[0].completions).toContain(todayKey());
+    expect(useHabitStore.getState().data.habits[0].completions).toContain(dayNow());
     expect(screen.getByText('Bugün tamamlandı')).toBeTruthy();
     expect(screen.getByText('Bugün tamam!')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('habit-check-a'));
     await settle();
-    expect(useHabitStore.getState().data.habits[0].completions).not.toContain(todayKey());
+    expect(useHabitStore.getState().data.habits[0].completions).not.toContain(dayNow());
   });
 
   it('detay ekranında seriyi gösterir ve bugünü işaretler', async () => {
-    const today = todayKey();
+    const today = dayNow();
     await seed([
       {
         id: 'b',
@@ -115,6 +115,30 @@ describe('uygulama akışı', () => {
     expect(screen.getByText('Bu zincir bulunamadı')).toBeTruthy();
   });
 
+  it('ayarlardan zincir kurallarını ve hatırlatmayı değiştirir', async () => {
+    renderRouter(ROUTES, { initialUrl: '/settings' });
+    await settle();
+    expect(screen.getByText('Akşam hatırlatması')).toBeTruthy();
+    expect(screen.getByText('21:00')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Daha geç'));
+    await settle();
+    expect(useHabitStore.getState().data.settings.reminder).toMatchObject({ hour: 21, minute: 30 });
+
+    fireEvent(screen.getByTestId('grace-toggle'), 'valueChange', false);
+    await settle();
+    expect(useHabitStore.getState().data.settings.grace).toBe(false);
+
+    fireEvent.press(screen.getByLabelText('Gün gece yarısı bitsin'));
+    await settle();
+    expect(useHabitStore.getState().data.settings.dayStartHour).toBe(0);
+
+    fireEvent(screen.getByTestId('reminder-toggle'), 'valueChange', false);
+    await settle();
+    expect(useHabitStore.getState().data.settings.reminder.enabled).toBe(false);
+    expect(screen.queryByText('21:30')).toBeNull();
+  });
+
   it('tanınmayan bağlantıda ana ekrana döner', async () => {
     const { getPathname } = renderRouter(ROUTES, { initialUrl: '/bilinmeyen/yol' });
     await settle();
@@ -130,7 +154,7 @@ describe('uygulama akışı', () => {
         emoji: '🧘',
         color: '#A35CF0',
         schedule: { kind: 'days', days: [0, 1, 2, 3, 4, 5, 6] },
-        startDate: todayKey(),
+        startDate: dayNow(),
         completions: [],
         createdAt: 1,
       },

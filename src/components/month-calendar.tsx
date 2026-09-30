@@ -4,7 +4,7 @@ import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react
 
 import { type DayKey, daysInMonth, parseDayKey, weekdayOf } from '@/domain/dates';
 import { MONTH_NAMES, WEEKDAY_LETTER } from '@/domain/labels';
-import { calendarDayState, type CalendarDayState } from '@/domain/streak';
+import { calendarDayState, type CalendarDayState, missMarks } from '@/domain/streak';
 import type { Habit } from '@/domain/types';
 import { onColor, roundedFont, useTheme, withAlpha } from '@/theme';
 
@@ -13,6 +13,7 @@ import { Txt } from './ui';
 interface Props {
   habit: Habit;
   today: DayKey;
+  grace: boolean;
   onToggle: (day: DayKey, done: boolean) => void;
 }
 
@@ -31,13 +32,14 @@ function pad(n: number) {
 
 const MAX_MONTHS_BACK = 36;
 
-export function MonthCalendar({ habit, today, onToggle }: Props) {
+export function MonthCalendar({ habit, today, grace, onToggle }: Props) {
   const { colors } = useTheme();
   const t = parseDayKey(today);
   const [offset, setOffset] = useState(0);
   const [width, setWidth] = useState(0);
   const current = shift(monthKey(t.year, t.month), -offset);
 
+  const marks = useMemo(() => missMarks(habit, today, grace), [habit, today, grace]);
   const cells = useMemo(() => {
     const first = `${current.year}-${pad(current.month)}-01`;
     const lead = weekdayOf(first);
@@ -46,11 +48,11 @@ export function MonthCalendar({ habit, today, onToggle }: Props) {
     for (let i = 0; i < lead; i++) list.push(null);
     for (let n = 1; n <= total; n++) {
       const day = `${current.year}-${pad(current.month)}-${pad(n)}`;
-      list.push({ day, n, state: calendarDayState(habit, day, today) });
+      list.push({ day, n, state: calendarDayState(habit, day, today, marks) });
     }
     while (list.length % 7 !== 0) list.push(null);
     return list;
-  }, [current.year, current.month, habit, today]);
+  }, [current.year, current.month, habit, today, marks]);
 
   const cell = width > 0 ? Math.floor(width / 7) : 44;
   const dot = Math.min(40, cell - 6);
@@ -116,6 +118,9 @@ export function MonthCalendar({ habit, today, onToggle }: Props) {
           } else if (state === 'missed') {
             bg = colors.dangerSoft;
             fg = colors.danger;
+          } else if (state === 'forgiven') {
+            bg = colors.warningSoft;
+            fg = colors.warning;
           } else if (state === 'today') {
             border = tint;
             bg = withAlpha(tint, 0.08);
@@ -134,7 +139,7 @@ export function MonthCalendar({ habit, today, onToggle }: Props) {
               onPress={() => onToggle(c.day, !done)}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: done, disabled }}
-              accessibilityLabel={`${c.n} ${MONTH_NAMES[current.month - 1]}${done ? ', yapıldı' : state === 'missed' ? ', kaçırıldı' : state === 'rest' ? ', izin günü' : ''}`}
+              accessibilityLabel={`${c.n} ${MONTH_NAMES[current.month - 1]}${done ? ', yapıldı' : state === 'missed' ? ', kaçırıldı' : state === 'forgiven' ? ', hata payıyla geçildi' : state === 'rest' ? ', izin günü' : ''}`}
               style={{ width: cell, height: cell, alignItems: 'center', justifyContent: 'center' }}
             >
               {({ pressed }) => (
@@ -167,6 +172,7 @@ export function MonthCalendar({ habit, today, onToggle }: Props) {
       <View style={styles.legend}>
         <Legend color={tint} label="Yapıldı" />
         {habit.schedule.kind === 'days' ? <Legend color={colors.danger} soft label="Kaçırıldı" /> : null}
+        {habit.schedule.kind === 'days' && grace ? <Legend color={colors.warning} soft label="Hata payı" /> : null}
         <Legend color={tint} ring label="Bugün" />
       </View>
     </View>
@@ -231,8 +237,9 @@ const styles = StyleSheet.create({
   },
   legend: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 16,
+    gap: 14,
     marginTop: 10,
   },
   legendItem: {

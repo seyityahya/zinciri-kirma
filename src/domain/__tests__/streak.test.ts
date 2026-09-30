@@ -1,7 +1,20 @@
 import { addDays } from '../dates';
-import { calendarDayState, chainAgeDays, computeStatus, countsToday, recentSlots } from '../streak';
-import type { Schedule } from '../types';
+import {
+  calendarDayState,
+  chainAgeDays,
+  computeStatus as computeWithGrace,
+  countsToday,
+  missMarks,
+  recentSlots as slotsWithGrace,
+} from '../streak';
+import type { Habit, Schedule } from '../types';
 import { back, DAILY, FRI, habit, MON, range, SAT, SUN, THU, TUE, WED, WEEKDAYS } from './helpers';
+
+// Eski (katı) kurallar: hata payı kapalı.
+const computeStatus = (h: Habit, today: string) => computeWithGrace(h, today, false);
+const recentSlots = (h: Habit, today: string, count: number) => slotsWithGrace(h, today, count, false);
+const dayState = (h: Habit, day: string, today: string, grace = false) =>
+  calendarDayState(h, day, today, missMarks(h, today, grace));
 
 describe('computeStatus — her gün', () => {
   it('bugün dahil ardışık günleri sayar', () => {
@@ -251,9 +264,10 @@ describe('computeStatus — haftada N kez', () => {
 describe('recentSlots', () => {
   it('her gün zincirinde son günleri sırayla verir', () => {
     const slots = recentSlots(habit(DAILY, back(TUE, 1, 2, 4), addDays(TUE, -5)), TUE, 7);
+    // Zincir ilk yapılan günden başlar; öncesi boş halkadır.
     expect(slots.map((s) => s.state)).toEqual([
       'empty',
-      'missed',
+      'empty',
       'done',
       'missed',
       'done',
@@ -281,12 +295,13 @@ describe('recentSlots', () => {
 
   it('aralıklı zincirde kırılmaları ekler', () => {
     const slots = recentSlots(habit({ kind: 'interval', every: 2 }, back(TUE, 8, 6, 1)), TUE, 6);
-    expect(slots.map((s) => s.state)).toEqual(['empty', 'done', 'done', 'missed', 'done', 'pending']);
+    // 5 günlük boşluk, 2 günlük sürede 2 kaçırma demektir.
+    expect(slots.map((s) => s.state)).toEqual(['done', 'done', 'missed', 'missed', 'done', 'pending']);
   });
 
   it('aralıklı zincir süresi geçtiyse kırık ve yeni halka gösterir', () => {
     const slots = recentSlots(habit({ kind: 'interval', every: 2 }, back(TUE, 5)), TUE, 3);
-    expect(slots.map((s) => s.state)).toEqual(['done', 'missed', 'pending']);
+    expect(slots.map((s) => s.state)).toEqual(['missed', 'missed', 'pending']);
   });
 
   it('istenen sayıda halka döner ve anahtarlar benzersizdir', () => {
@@ -302,24 +317,28 @@ describe('recentSlots', () => {
 describe('calendarDayState', () => {
   it('günleri doğru sınıflandırır', () => {
     const h = habit(WEEKDAYS, [MON], MON);
-    expect(calendarDayState(h, MON, THU)).toBe('done');
-    expect(calendarDayState(h, TUE, THU)).toBe('missed');
-    expect(calendarDayState(h, THU, THU)).toBe('today');
-    expect(calendarDayState(h, FRI, THU)).toBe('future');
-    expect(calendarDayState(h, '2026-09-27', THU)).toBe('rest');
-    expect(calendarDayState(h, '2026-09-25', THU)).toBe('none');
+    expect(dayState(h, MON, THU)).toBe('done');
+    expect(dayState(h, TUE, THU)).toBe('missed');
+    expect(dayState(h, THU, THU)).toBe('today');
+    expect(dayState(h, FRI, THU)).toBe('future');
+    expect(dayState(h, '2026-09-27', THU)).toBe('rest');
+    expect(dayState(h, '2026-09-25', THU)).toBe('none');
+    // Hata payı açıkken ilk kaçırma affedilir
+    expect(dayState(h, TUE, THU, true)).toBe('forgiven');
+    expect(dayState(h, WED, THU, true)).toBe('missed');
   });
 
   it('aralıklı zincirde kaçırılan gün göstermez', () => {
     const h = habit({ kind: 'interval', every: 2 }, [MON], MON);
-    expect(calendarDayState(h, TUE, THU)).toBe('none');
-    expect(calendarDayState(h, THU, THU)).toBe('today');
+    expect(dayState(h, TUE, THU)).toBe('none');
+    expect(dayState(h, THU, THU)).toBe('today');
   });
 });
 
 describe('countsToday', () => {
   const counts = (schedule: Schedule, completions: string[], today: string, start?: string) =>
     countsToday(schedule, computeStatus(habit(schedule, completions, start), today));
+
 
   it('planlı günleri ve bugün yapılanları sayar', () => {
     expect(counts(WEEKDAYS, [MON], TUE)).toBe(true);

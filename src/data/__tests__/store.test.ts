@@ -1,7 +1,7 @@
-import { todayKey } from '@/domain/dates';
+
 import { parseAppData, serializeAppData } from '@/domain/validate';
 
-import { __resetStoreForTests, flushStore, useHabitStore } from '../store';
+import { __resetStoreForTests, dayNow, flushStore, useHabitStore } from '../store';
 
 // Diski ve "widget"ı taklit eden bellek içi depo.
 let mockDisk: string | null = null;
@@ -66,9 +66,9 @@ describe('useHabitStore', () => {
     await useHabitStore.getState().init();
     const id = useHabitStore.getState().addHabit(input);
     expect(useHabitStore.getState().toggleToday(id)).toBe(true);
-    expect(useHabitStore.getState().data.habits[0].completions).toEqual([todayKey()]);
+    expect(useHabitStore.getState().data.habits[0].completions).toEqual([dayNow()]);
     await flushStore();
-    expect(stored()?.habits[0].completions).toEqual([todayKey()]);
+    expect(stored()?.habits[0].completions).toEqual([dayNow()]);
     expect(useHabitStore.getState().toggleToday(id)).toBe(false);
     await flushStore();
     expect(stored()?.habits[0].completions).toEqual([]);
@@ -89,7 +89,7 @@ describe('useHabitStore', () => {
 
     const data = stored()!;
     expect(data.habits.find((h) => h.id === a)?.completions).toEqual(['2026-01-02']);
-    expect(data.habits.find((h) => h.id === b)?.completions).toEqual([todayKey()]);
+    expect(data.habits.find((h) => h.id === b)?.completions).toEqual([dayNow()]);
     // Ekran da birleşik sonucu gösterir
     expect(useHabitStore.getState().data.habits.find((h) => h.id === a)?.completions).toEqual(['2026-01-02']);
   });
@@ -145,5 +145,31 @@ describe('useHabitStore', () => {
     const first = stored()!.updatedAt;
     await useHabitStore.getState().setCompletion(id, '2026-01-01', true);
     expect(stored()!.updatedAt).toBeGreaterThan(first);
+  });
+});
+
+describe('ayarlar', () => {
+  beforeEach(() => {
+    mockDisk = null;
+    __resetStoreForTests();
+  });
+
+  it('ayarları günceller, diske yazar ve zincirlere dokunmaz', async () => {
+    await useHabitStore.getState().init();
+    const id = useHabitStore.getState().addHabit(input);
+    await useHabitStore.getState().updateSettings({ grace: false, reminder: { hour: 22 } });
+    const data = stored()!;
+    expect(data.settings).toEqual({ dayStartHour: 3, grace: false, reminder: { enabled: true, hour: 22, minute: 0 } });
+    expect(data.habits.map((h) => h.id)).toEqual([id]);
+  });
+
+  it('eski verilerde varsayılan ayarları kullanır', async () => {
+    mockDisk = JSON.stringify({ version: 1, updatedAt: 1, habits: [] });
+    await useHabitStore.getState().init();
+    expect(useHabitStore.getState().data.settings).toEqual({
+      dayStartHour: 3,
+      grace: true,
+      reminder: { enabled: true, hour: 21, minute: 0 },
+    });
   });
 });
