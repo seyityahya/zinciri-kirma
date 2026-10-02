@@ -16,6 +16,9 @@ zincirinin kaç gündür sürdüğünü her an görebilirsin.
 - Takvimden geçmiş günleri işaretleme/düzeltme, en uzun seri, toplam, başarı oranı
 - Açık/koyu tema, titreşimli geri bildirim, VoiceOver desteği
 - Hesap ve sunucu yok: veriler yalnızca cihazda
+- **Yedekleme:** tüm zincirler tek bir dosyaya (`zinciri-kirma-yedek-YYYY-AA-GG.json`) alınır ve Drive'a,
+  Dosyalar'a ya da kendine gönderilir; yeni telefonda (iPhone ↔ Android dahil) dosyadan geri yüklenir.
+  Geri yüklerken mevcut zincirlerle birleştirme ya da onları değiştirme seçilebilir ve işlem geri alınabilir.
 
 ## Çalıştırma
 
@@ -95,6 +98,10 @@ bağımlılık eklerdi).
 - **Android:** Widget olayları uygulamanın JS ortamında (headless) çalışır ve aynı depoyu kullanır.
 - Her değişiklik diskteki **en güncel** veriye uygulanarak yazılır. Böylece widget'ın yaptığı işaretlemeler
   uygulama tarafından asla ezilmez.
+- **Yedek dosyası:** biçim, doğrulama ve birleştirme kuralı `src/domain/backup.ts` içinde; dosya yazma,
+  paylaşma ve seçme `src/data/backup-files.ts` içinde (`expo-file-system`, `expo-sharing`,
+  `expo-document-picker`). Dosya `{ format, version, exportedAt, app, data }` biçiminde bir JSON'dur; `version`
+  uygulamanın desteklediğinden büyükse geri yükleme "uygulamayı güncelle" uyarısıyla reddedilir.
 
 **Tek mantık, iki dil.** Seri hesabı `src/domain/streak.ts` içinde. iOS widget'ı Swift'te çalıştığı için
 aynı mantık `targets/widget/ChainLogic.swift` içinde de var. Bir parite testi, rastgele üretilmiş

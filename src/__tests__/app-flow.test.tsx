@@ -1,10 +1,31 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
+import { Alert } from 'react-native';
 
+import { pickBackup, shareBackup } from '@/data/backup-files';
+import { usePrefs } from '@/data/prefs';
 import { __resetStoreForTests, dayNow, flushStore, useHabitStore } from '@/data/store';
 import { addDays } from '@/domain/dates';
+import { emptyData } from '@/domain/types';
+
+jest.mock('@/data/backup-files', () => ({
+  pickBackup: jest.fn(),
+  shareBackup: jest.fn(async () => true),
+  saveBackupToFolder: jest.fn(),
+}));
 
 const ROUTES = './src/app';
+
+const BACKUP_HABIT = {
+  id: 'h',
+  name: 'Zincir',
+  emoji: '🔥',
+  color: '#FF6B3D',
+  schedule: { kind: 'days' as const, days: [0, 1, 2, 3, 4, 5, 6] as (0 | 1 | 2 | 3 | 4 | 5 | 6)[] },
+  startDate: '2026-01-01',
+  completions: ['2026-01-01', '2026-01-02'],
+  createdAt: 1,
+};
 
 async function settle() {
   await act(async () => {
@@ -23,6 +44,8 @@ async function seed(habits: object[]) {
 beforeEach(async () => {
   await AsyncStorage.clear();
   __resetStoreForTests();
+  usePrefs.setState({ lastBackupAt: null });
+  jest.clearAllMocks();
 });
 
 afterEach(() => {
@@ -173,6 +196,94 @@ describe('uygulama akışı', () => {
       name: 'Nefes egzersizi',
       schedule: { kind: 'interval', every: 2 },
     });
+  });
+
+  it('boş ekrandan yedeği geri yükler', async () => {
+    jest.mocked(pickBackup).mockResolvedValueOnce({
+      ok: true,
+      exportedAt: new Date(2026, 9, 1, 14, 5).getTime(),
+      data: {
+        ...emptyData(),
+        habits: [
+          { ...BACKUP_HABIT, id: 'y1', name: 'Yoga', emoji: '🧘' },
+          { ...BACKUP_HABIT, id: 'y2', name: 'Su iç', emoji: '💧', completions: [addDays(dayNow(), -1)] },
+        ],
+      },
+    });
+    renderRouter(ROUTES, { initialUrl: '/' });
+    await settle();
+
+    fireEvent.press(screen.getByTestId('empty-restore'));
+    await settle();
+    expect(screen.getByText('Yedeği geri yükle')).toBeTruthy();
+    expect(screen.getByText('1 Ekim 2026, 14:05 tarihli yedek')).toBeTruthy();
+    expect(screen.getByLabelText('2 zincir')).toBeTruthy();
+    expect(screen.getByLabelText('3 halka')).toBeTruthy();
+    // Telefonda zincir yokken seçenek sorulmaz
+    expect(screen.queryByTestId('restore-merge')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('restore-confirm'));
+    await settle();
+    expect(useHabitStore.getState().data.habits.map((h) => h.name)).toEqual(['Yoga', 'Su iç']);
+    expect(screen.getAllByText('Yoga').length).toBeGreaterThan(0);
+  });
+
+  it('ayarlardan yedeği birleştirir ve geri alır', async () => {
+    await seed([{ ...BACKUP_HABIT, id: 'mevcut', name: 'Kitap oku', emoji: '📚' }]);
+    jest.mocked(pickBackup).mockResolvedValueOnce({
+      ok: true,
+      exportedAt: null,
+      data: { ...emptyData(), habits: [{ ...BACKUP_HABIT, id: 'y1', name: 'Yoga' }] },
+    });
+    renderRouter(ROUTES, { initialUrl: '/settings' });
+    await settle();
+
+    fireEvent.press(screen.getByTestId('backup-restore'));
+    await settle();
+    expect(screen.getByText('Bu telefonda şu an 1 zincir var. Ne yapmak istersin?')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('restore-merge'));
+    await settle();
+    expect(useHabitStore.getState().data.habits.map((h) => h.name)).toEqual(['Kitap oku', 'Yoga']);
+    expect(screen.getByText('Yedek birleştirildi. Şimdi 2 zincirin var.')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('backup-undo'));
+    await settle();
+    expect(useHabitStore.getState().data.habits.map((h) => h.name)).toEqual(['Kitap oku']);
+    expect(screen.getByText('Değişiklik geri alındı.')).toBeTruthy();
+  });
+
+  it('yedek olmayan dosyada ne yapılacağını söyler', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    jest.mocked(pickBackup).mockResolvedValueOnce({ ok: false, error: 'not-backup' });
+    renderRouter(ROUTES, { initialUrl: '/settings' });
+    await settle();
+
+    fireEvent.press(screen.getByTestId('backup-restore'));
+    await settle();
+    expect(alert).toHaveBeenCalledWith('Bu bir yedek dosyası değil', expect.stringContaining('zinciri-kirma-yedek'));
+    expect(screen.queryByText('Yedeği geri yükle')).toBeNull();
+    alert.mockRestore();
+  });
+
+  it('yedek alır ve son yedek bilgisini günceller', async () => {
+    await seed([{ ...BACKUP_HABIT, id: 'a', name: 'Kitap oku' }]);
+    renderRouter(ROUTES, { initialUrl: '/settings' });
+    await settle();
+    expect(screen.getByText('Henüz yedek almadın')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('backup-export'));
+    await settle();
+    expect(shareBackup).toHaveBeenCalledWith(expect.objectContaining({ habits: [expect.objectContaining({ id: 'a' })] }));
+    expect(screen.getByText('Son yedek: bugün')).toBeTruthy();
+  });
+
+  it('zincir yokken yedek alınamaz', async () => {
+    renderRouter(ROUTES, { initialUrl: '/settings' });
+    await settle();
+    const button = screen.getByTestId('backup-export');
+    expect(button.props.accessibilityState?.disabled ?? button.props['aria-disabled']).toBeTruthy();
+    expect(screen.getByText('Yedeklenecek zincir yok')).toBeTruthy();
   });
 
   it('belirli günlerde hiç gün seçilmezse kaydetmez', async () => {

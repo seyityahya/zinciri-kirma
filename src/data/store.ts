@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { mergeAppData, replaceAppData, type RestoreMode } from '@/domain/backup';
 import { type DayKey, logicalDayKey } from '@/domain/dates';
 import * as M from '@/domain/mutations';
 import { type AppData, type AppSettings, emptyData, type Habit } from '@/domain/types';
@@ -37,6 +38,8 @@ export interface HabitStore {
   updateSettings(patch: SettingsPatch): Promise<void>;
   /** Hazır zincirleri toplu ekler (geliştirici örnek verisi). */
   addHabits(habits: Habit[]): Promise<void>;
+  /** Yedekteki veriyi uygular: 'replace' zincirleri ve ayarları değiştirir, 'merge' birleştirir. */
+  importData(incoming: AppData, mode: RestoreMode): Promise<void>;
   resetAll(): Promise<void>;
 }
 
@@ -186,6 +189,13 @@ export const useHabitStore = create<HabitStore>((set, get) => {
 
     addHabits(habits) {
       return commit((d) => habits.reduce((acc, h) => M.addHabit(acc, h), d));
+    },
+
+    importData(incoming, mode) {
+      const result = commit((d) => (mode === 'replace' ? replaceAppData(d, incoming) : mergeAppData(d, incoming)));
+      // Yedekteki "gün bitişi" farklı olabilir.
+      set({ today: dayNow(get().data.settings) });
+      return result;
     },
 
     resetAll() {

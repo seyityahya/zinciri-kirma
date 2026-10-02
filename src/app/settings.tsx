@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import {
   Bell,
   BellRing,
-  Check,
   Flame,
   FlaskConical,
   Minus,
@@ -30,6 +29,7 @@ import {
 import { requestPinWidget } from 'react-native-android-widget';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackupCard } from '@/components/backup-card';
 import { BackButton, Card, PrimaryButton, SectionTitle, Txt } from '@/components/ui';
 import { demoHabits } from '@/data/demo';
 import { type ThemePreference, usePrefs } from '@/data/prefs';
@@ -284,6 +284,10 @@ export default function SettingsScreen() {
         </Card>
 
         <View style={styles.gap} />
+        <SectionTitle>Yedekleme</SectionTitle>
+        <BackupCard />
+
+        <View style={styles.gap} />
         <SectionTitle>Zincir kuralları</SectionTitle>
         <Card>
           <Txt variant="headline">Gün bitişi</Txt>
@@ -423,15 +427,6 @@ export default function SettingsScreen() {
 
         <View style={styles.gap} />
         <SectionTitle>Veriler</SectionTitle>
-        <Card style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Txt variant="headline">Verilerin bu cihazda</Txt>
-            <Txt variant="caption" tone="secondary" style={{ marginTop: 2 }}>
-              Hesap gerekmez; zincirlerin yalnızca bu telefonda saklanır.
-            </Txt>
-          </View>
-          <Check size={20} color={colors.success} strokeWidth={2.6} />
-        </Card>
         <Pressable
           onPress={resetAll}
           disabled={count === 0}
@@ -667,7 +662,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   danger: {
-    marginTop: 10,
     height: 54,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,

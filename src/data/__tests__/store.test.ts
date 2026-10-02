@@ -148,6 +148,44 @@ describe('useHabitStore', () => {
   });
 });
 
+describe('yedekten geri yükleme', () => {
+  const backup = {
+    version: 1 as const,
+    updatedAt: 5,
+    settings: { dayStartHour: 0, grace: false, reminder: { enabled: false, hour: 20, minute: 30 } },
+    habits: [
+      { id: 'y1', name: 'Yoga', emoji: '🧘', color: '#A35CF0', schedule: input.schedule, startDate: '2026-01-01', completions: ['2026-01-01', '2026-01-02'], createdAt: 1 },
+    ],
+  };
+
+  it('değiştirirken zincirleri ve ayarları yazar, widget\'ı günceller', async () => {
+    await useHabitStore.getState().init();
+    useHabitStore.getState().addHabit(input);
+    await flushStore();
+    mockSyncWidgets.mockClear();
+
+    await useHabitStore.getState().importData(backup, 'replace');
+    const data = stored()!;
+    expect(data.habits.map((h) => h.name)).toEqual(['Yoga']);
+    expect(data.settings).toEqual(backup.settings);
+    expect(useHabitStore.getState().today).toBe(dayNow(backup.settings));
+    expect(mockSyncWidgets).toHaveBeenCalledTimes(1);
+  });
+
+  it('birleştirirken mevcut zincirleri ve widget işaretlerini korur', async () => {
+    await useHabitStore.getState().init();
+    const a = useHabitStore.getState().addHabit(input);
+    await flushStore();
+    widgetMarks(a, '2026-01-05');
+
+    await useHabitStore.getState().importData(backup, 'merge');
+    const data = stored()!;
+    expect(data.habits.map((h) => h.name)).toEqual(['Kitap oku', 'Yoga']);
+    expect(data.habits[0].completions).toEqual(['2026-01-05']);
+    expect(data.settings.grace).toBe(true);
+  });
+});
+
 describe('ayarlar', () => {
   beforeEach(() => {
     mockDisk = null;

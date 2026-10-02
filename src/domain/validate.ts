@@ -95,6 +95,11 @@ export function parseAppData(json: string | null | undefined): AppData | null {
   } catch {
     return null;
   }
+  return normalizeAppData(raw);
+}
+
+/** Çözümlenmiş (güvenilmeyen) bir nesneyi AppData'ya çevirir; nesne değilse null. */
+export function normalizeAppData(raw: unknown): AppData | null {
   if (!raw || typeof raw !== 'object') return null;
   const v = raw as Record<string, unknown>;
   const habits: Habit[] = [];

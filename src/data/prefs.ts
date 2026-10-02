@@ -12,9 +12,17 @@ export interface Prefs {
   widgetTipDismissed: boolean;
   /** Bildirim izni bu cihazda bir kez soruldu mu? */
   notificationAsked: boolean;
+  /** Bu cihazda son yedek dosyasının oluşturulduğu an (ms). */
+  lastBackupAt: number | null;
 }
 
-const DEFAULT_PREFS: Prefs = { theme: 'system', haptics: true, widgetTipDismissed: false, notificationAsked: false };
+const DEFAULT_PREFS: Prefs = {
+  theme: 'system',
+  haptics: true,
+  widgetTipDismissed: false,
+  notificationAsked: false,
+  lastBackupAt: null,
+};
 
 interface PrefsStore extends Prefs {
   loaded: boolean;
@@ -37,6 +45,7 @@ function sanitize(value: unknown): Prefs {
     haptics: typeof v.haptics === 'boolean' ? v.haptics : DEFAULT_PREFS.haptics,
     widgetTipDismissed: v.widgetTipDismissed === true,
     notificationAsked: v.notificationAsked === true,
+    lastBackupAt: typeof v.lastBackupAt === 'number' && Number.isFinite(v.lastBackupAt) ? v.lastBackupAt : null,
   };
 }
 
@@ -58,8 +67,8 @@ export const usePrefs = create<PrefsStore>((set, get) => ({
   },
 
   update(patch) {
-    const { theme, haptics, widgetTipDismissed, notificationAsked } = { ...get(), ...patch };
-    const next: Prefs = { theme, haptics, widgetTipDismissed, notificationAsked };
+    const { theme, haptics, widgetTipDismissed, notificationAsked, lastBackupAt } = { ...get(), ...patch };
+    const next: Prefs = { theme, haptics, widgetTipDismissed, notificationAsked, lastBackupAt };
     if (patch.theme !== undefined) applyTheme(next.theme);
     set(next);
     AsyncStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(() => {});

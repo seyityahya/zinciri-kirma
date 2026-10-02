@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp, Pencil, Plus, Settings2, Smartphone, Trash2, X } from 'lucide-react-native';
+import { ArchiveRestore, ArrowDown, ArrowUp, Pencil, Plus, Settings2, Smartphone, Trash2, X } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionSheet } from '@/components/action-sheet';
 import { ChainRow } from '@/components/chain-links';
 import { HabitCard } from '@/components/habit-card';
+import { RestoreSheet } from '@/components/restore-sheet';
 import { Card, IconButton, PrimaryButton, ProgressRing, ScalePressable, Txt } from '@/components/ui';
 import { usePrefs } from '@/data/prefs';
 import { useHabitStore } from '@/data/store';
@@ -15,6 +16,7 @@ import { longDateLabel, unitLabel } from '@/domain/labels';
 import { PRESETS } from '@/domain/presets';
 import { chainAgeDays, computeStatus, countsToday } from '@/domain/streak';
 import { haptic } from '@/lib/haptics';
+import { useRestore } from '@/lib/use-backup';
 import { radius, roundedFont, useTheme, withAlpha } from '@/theme';
 
 export default function HomeScreen() {
@@ -25,6 +27,7 @@ export default function HomeScreen() {
   const ready = useHabitStore((s) => s.ready);
   const tipDismissed = usePrefs((s) => s.widgetTipDismissed);
   const [menuId, setMenuId] = useState<string | null>(null);
+  const restore = useRestore();
 
   const openHabit = useCallback((id: string) => router.push({ pathname: '/habit/[id]', params: { id } }), []);
   const openMenu = useCallback((id: string) => setMenuId(id), []);
@@ -77,7 +80,7 @@ export default function HomeScreen() {
         </View>
 
         {!ready ? null : habits.length === 0 ? (
-          <EmptyState />
+          <EmptyState onRestore={() => void restore.start()} restoring={restore.busy} />
         ) : (
           <>
             <Summary />
@@ -129,6 +132,12 @@ export default function HomeScreen() {
               ]
             : []
         }
+      />
+      <RestoreSheet
+        backup={restore.pending}
+        currentCount={habits.length}
+        onRestore={(mode) => void restore.apply(mode)}
+        onClose={restore.cancel}
       />
     </View>
   );
@@ -234,7 +243,7 @@ function WidgetTip() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onRestore, restoring }: { onRestore: () => void; restoring: boolean }) {
   const { colors } = useTheme();
   return (
     <Animated.View entering={FadeInDown.springify().damping(18)} style={styles.empty}>
@@ -258,6 +267,25 @@ function EmptyState() {
       <View style={{ alignSelf: 'stretch', marginTop: 24 }}>
         <PrimaryButton label="Zincir oluştur" icon={Plus} onPress={() => router.push('/form')} testID="empty-add" />
       </View>
+      <Pressable
+        onPress={onRestore}
+        disabled={restoring}
+        accessibilityRole="button"
+        accessibilityLabel="Yedeğin var mı? Yedekten geri yükle"
+        testID="empty-restore"
+        style={({ pressed }) => [
+          styles.restoreLink,
+          { backgroundColor: pressed ? colors.surfacePressed : 'transparent', opacity: restoring ? 0.5 : 1 },
+        ]}
+      >
+        <ArchiveRestore size={17} color={colors.textSecondary} strokeWidth={2.4} />
+        <Txt variant="callout" tone="secondary">
+          Yedeğin var mı?{' '}
+          <Txt variant="callout" tone="brand" weight="700">
+            Geri yükle
+          </Txt>
+        </Txt>
+      </Pressable>
 
       <Txt variant="overline" tone="secondary" style={{ marginTop: 34, marginBottom: 12 }}>
         Ya da birini seç
@@ -295,6 +323,15 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 18,
     paddingHorizontal: 2,
+  },
+  restoreLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
   },
   summary: {
     flexDirection: 'row',
