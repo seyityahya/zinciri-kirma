@@ -10,7 +10,7 @@ function daysBack(today: string, n: number, skip: number[] = []): string[] {
 }
 
 describe('hata payı — her gün', () => {
-  it('tek kaçırma zinciri kırmaz, sayılmaz ve turuncu görünür', () => {
+  it('tek kaçırma affedilir, sayılmaz ve turuncu görünür', () => {
     // T-9..T, T-3 hariç
     const h = habit(DAILY, daysBack(TUE, 10, [3]));
     const s = computeStatus(h, TUE, true);
@@ -191,10 +191,10 @@ describe('akşam hatırlatması', () => {
     ];
     expect(reminderContent(items)).toEqual({
       title: 'Bugün 3 zincir seni bekliyor',
-      body: 'Kitap oku, Koşu ve Meditasyon. Zinciri kırma! Koşu için hata payın kalmadı.',
+      body: 'Kitap oku, Koşu ve Meditasyon. Sözünü tut! Koşu için hata payın kalmadı.',
     });
     const five = ['A', 'B', 'C', 'D', 'E'].map((n) => item(n, DAILY, daysBack(TUE, 2, [0])));
-    expect(reminderContent(five)?.body).toBe('A, B ve 3 zincir daha. Zinciri kırma!');
+    expect(reminderContent(five)?.body).toBe('A, B ve 3 zincir daha. Sözünü tut!');
   });
 
   it('haftalık hedef bu hafta tamamsa hatırlatmaz', () => {

@@ -93,15 +93,15 @@ describe('yedeği paylaşma', () => {
   it('geçerli bir yedek dosyası yazıp paylaşım menüsünü açar', async () => {
     expect(await shareBackup(sample, now)).toBe(true);
 
-    const uri = 'file:///cache/backups/zinciri-kirma-yedek-2026-10-01.json';
+    const uri = 'file:///cache/backups/sozum-soz-yedek-2026-10-01.json';
     expect(Sharing.shareAsync).toHaveBeenCalledWith(uri, expect.objectContaining({ mimeType: 'application/json' }));
     expect(parseBackup(mockFiles.get(uri)!)).toMatchObject({ ok: true, data: sample });
   });
 
   it('eski geçici yedekleri temizler', async () => {
-    mockFiles.set('file:///cache/backups/zinciri-kirma-yedek-2026-01-01.json', '{}');
+    mockFiles.set('file:///cache/backups/sozum-soz-yedek-2026-01-01.json', '{}');
     await shareBackup(sample, now);
-    expect([...mockFiles.keys()]).toEqual(['file:///cache/backups/zinciri-kirma-yedek-2026-10-01.json']);
+    expect([...mockFiles.keys()]).toEqual(['file:///cache/backups/sozum-soz-yedek-2026-10-01.json']);
   });
 
   it('paylaşım yoksa false döner', async () => {
@@ -117,7 +117,7 @@ describe('klasöre kaydetme (Android)', () => {
     jest.mocked(Directory.pickDirectoryAsync).mockResolvedValueOnce(new Directory(folder));
 
     expect(await saveBackupToFolder(sample, now)).toEqual({ status: 'saved', folder: 'Documents' });
-    expect(parseBackup(mockFiles.get(`${folder}/zinciri-kirma-yedek-2026-10-01.json`)!).ok).toBe(true);
+    expect(parseBackup(mockFiles.get(`${folder}/sozum-soz-yedek-2026-10-01.json`)!).ok).toBe(true);
   });
 
   it('klasör seçimi iptal edilirse bir şey yazmaz', async () => {

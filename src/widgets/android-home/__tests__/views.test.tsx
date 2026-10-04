@@ -81,7 +81,7 @@ describe('Android widget görünümleri', () => {
     const rep = habitWidget(undefined, data([])) as { light: React.JSX.Element };
     const nodes = tree(rep.light);
     expect(texts(nodes)).toContain('Henüz zincir yok');
-    expect(nodes[0].props.clickActionData).toEqual({ uri: 'zincirikirma://form' });
+    expect(nodes[0].props.clickActionData).toEqual({ uri: 'sozumsoz://form' });
   });
 
   it('bugün widget’ı tüm zincirleri kaydırılabilir listede gösterir', () => {

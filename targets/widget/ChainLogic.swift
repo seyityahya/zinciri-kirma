@@ -811,7 +811,7 @@ enum ZKText {
       : "\(names.dropLast().joined(separator: ", ")) ve \(names[names.count - 1])"
     let risky = waiting.filter { $0.status.graceUsed }.map { $0.name }
     let warning = risky.isEmpty ? "" : " \(risky.joined(separator: ", ")) için hata payın kalmadı."
-    return ("Bugün \(waiting.count) zincir seni bekliyor", "\(shown). Zinciri kırma!\(warning)")
+    return ("Bugün \(waiting.count) zincir seni bekliyor", "\(shown). Sözünü tut!\(warning)")
   }
 
   /// "Salı, 29 Eylül"
@@ -845,7 +845,7 @@ struct ZKPlannedReminder: Equatable {
 }
 
 enum ReminderPlanner {
-  static let prefix = "zk-reminder-"
+  static let prefix = "sozum-reminder-"
   static let days = 14
 
   static func reminderTime(day: Int, hour: Int, minute: Int, dayStartHour: Int, calendar: Calendar = DayMath.gregorian) -> Date {

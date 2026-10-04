@@ -30,7 +30,7 @@ const hex = (value: string) => value as HexColor;
 const rgba = (color: string, alpha: number) => withAlpha(color, alpha) as ColorProp;
 
 function link(id?: string) {
-  return { uri: id ? `zincirikirma://habit/${id}` : 'zincirikirma://' };
+  return { uri: id ? `sozumsoz://habit/${id}` : 'sozumsoz://' };
 }
 
 export function EmptyWidget({ mode }: { mode: WidgetMode }) {
@@ -38,7 +38,7 @@ export function EmptyWidget({ mode }: { mode: WidgetMode }) {
   return (
     <FlexWidget
       clickAction="OPEN_URI"
-      clickActionData={{ uri: 'zincirikirma://form' }}
+      clickActionData={{ uri: 'sozumsoz://form' }}
       style={{
         height: 'match_parent',
         width: 'match_parent',

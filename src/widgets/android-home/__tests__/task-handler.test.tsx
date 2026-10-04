@@ -10,7 +10,7 @@ const today = dayNow();
 
 async function seed() {
   await AsyncStorage.setItem(
-    'zk.data.v1',
+    'sozum.data.v1',
     JSON.stringify({
       version: 1,
       updatedAt: 1,
@@ -46,7 +46,7 @@ function props(overrides: Partial<WidgetTaskHandlerProps>): WidgetTaskHandlerPro
 }
 
 async function stored() {
-  return JSON.parse((await AsyncStorage.getItem('zk.data.v1')) ?? '{}');
+  return JSON.parse((await AsyncStorage.getItem('sozum.data.v1')) ?? '{}');
 }
 
 beforeEach(async () => {
@@ -82,8 +82,8 @@ describe('Android widget görev işleyicisi', () => {
   });
 
   it('widget silinince eşleşmesini kaldırır', async () => {
-    await AsyncStorage.setItem('zk.android-widgets.v1', JSON.stringify({ '7': 'a', '8': 'a' }));
+    await AsyncStorage.setItem('sozum.android-widgets.v1', JSON.stringify({ '7': 'a', '8': 'a' }));
     await widgetTaskHandler(props({ widgetAction: 'WIDGET_DELETED' }));
-    expect(JSON.parse((await AsyncStorage.getItem('zk.android-widgets.v1')) ?? '{}')).toEqual({ '8': 'a' });
+    expect(JSON.parse((await AsyncStorage.getItem('sozum.android-widgets.v1')) ?? '{}')).toEqual({ '8': 'a' });
   });
 });

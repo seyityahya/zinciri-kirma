@@ -4,7 +4,7 @@ import { Txt, upperTr } from '../ui';
 
 describe('upperTr', () => {
   it('Türkçe i/ı harflerini doğru büyütür', () => {
-    expect(upperTr('Zinciri Kırma')).toBe('ZİNCİRİ KIRMA');
+    expect(upperTr('Sigarayı bırak')).toBe('SİGARAYI BIRAK');
     expect(upperTr('Ya da birini seç')).toBe('YA DA BİRİNİ SEÇ');
     expect(upperTr('ığüşöç')).toBe('IĞÜŞÖÇ');
   });

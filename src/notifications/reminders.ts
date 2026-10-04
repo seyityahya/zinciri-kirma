@@ -77,7 +77,7 @@ export async function syncReminders(data: AppData, now: Date = new Date()): Prom
       for (const r of planReminders(data, now)) {
         await Notifications.scheduleNotificationAsync({
           identifier: r.id,
-          content: { title: r.title, body: r.body, sound: true, data: { url: 'zincirikirma://' } },
+          content: { title: r.title, body: r.body, sound: true, data: { url: 'sozumsoz://' } },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
             date: r.at,

@@ -35,7 +35,7 @@ export interface ReminderSettings {
 export interface AppSettings {
   /** Gün bu saatte biter: 3 → gece 03:00'e kadar hâlâ önceki gün sayılır (0–6). */
   dayStartHour: number;
-  /** Art arda 7 halkada 1 kaçırma zinciri kırmaz. */
+  /** Art arda 7 halkada 1 kaçırma affedilir. */
   grace: boolean;
   /** Akşam, bekleyen zincirler için tek bir hatırlatma. */
   reminder: ReminderSettings;

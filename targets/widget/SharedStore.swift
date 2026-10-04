@@ -3,9 +3,9 @@ import Foundation
 /// Uygulama ile widget'ın ortak kullandığı veri (App Group UserDefaults).
 /// Uygulama tarafı: src/data/storage.ios.ts — anahtar ve grup adı aynı olmalı.
 enum SharedStore {
-  static let appGroup = "group.com.seyit.zincirikirma"
-  static let dataKey = "zk.data.v1"
-  static let reminderDebugKey = "zk.reminders.lastSync"
+  static let appGroup = "group.com.seyit.sozumsoz"
+  static let dataKey = "sozum.data.v1"
+  static let reminderDebugKey = "sozum.reminders.lastSync"
 
   static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
 

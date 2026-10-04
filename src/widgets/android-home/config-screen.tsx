@@ -32,7 +32,7 @@ export function WidgetConfigScreen({ widgetInfo, renderWidget, setResult }: Widg
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: (StatusBar.currentHeight ?? 24) + 16 }]}>
       <Txt variant="overline" tone="brand">
-        Zinciri Kırma
+        Sözüm Söz
       </Txt>
       <Txt variant="display" style={{ marginTop: 4 }}>
         Hangi zincir görünsün?
@@ -53,7 +53,7 @@ export function WidgetConfigScreen({ widgetInfo, renderWidget, setResult }: Widg
             label="Uygulamayı aç"
             onPress={() => {
               setResult('cancel');
-              void Linking.openURL('zincirikirma://form');
+              void Linking.openURL('sozumsoz://form');
             }}
           />
         </View>

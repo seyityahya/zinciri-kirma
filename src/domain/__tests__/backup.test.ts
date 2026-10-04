@@ -52,6 +52,19 @@ describe('yedek dosyası', () => {
     expect(parseBackup(JSON.stringify({ format: BACKUP_FORMAT, data: {} }))).toEqual({ ok: false, error: 'not-backup' });
   });
 
+  it('uygulamanın eski adıyla (Zinciri Kırma) alınmış yedeği açar', () => {
+    const json = JSON.stringify({
+      format: 'zinciri-kirma-backup',
+      version: 1,
+      exportedAt: '2026-10-01T09:00:00.000Z',
+      data: data([habit('a', 'Kitap oku', [MON, TUE])]),
+    });
+    const parsed = parseBackup(json);
+    if (!parsed.ok) throw new Error('okunamadı');
+    expect(parsed.data.habits[0]).toMatchObject({ id: 'a', name: 'Kitap oku', completions: [MON, TUE] });
+    expect(parsed.exportedAt).toBe(Date.parse('2026-10-01T09:00:00.000Z'));
+  });
+
   it('daha yeni sürümün yedeğini tanır', () => {
     const json = JSON.stringify({ format: BACKUP_FORMAT, version: 2, data: data([habit('a', 'Su', [])]) });
     expect(parseBackup(json)).toEqual({ ok: false, error: 'newer-version' });
@@ -143,7 +156,7 @@ describe('yedek etiketleri', () => {
   const now = new Date(2026, 9, 1, 9, 0);
 
   it('dosya adı tarihi içerir', () => {
-    expect(backupFileName(now)).toBe('zinciri-kirma-yedek-2026-10-01.json');
+    expect(backupFileName(now)).toBe('sozum-soz-yedek-2026-10-01.json');
   });
 
   it('yedeğin tarihini saatle gösterir', () => {

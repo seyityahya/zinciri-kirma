@@ -189,7 +189,7 @@ export function reminderContent(items: ReminderItem[]): { title: string; body: s
   const shown = names.length > 3 ? `${names.slice(0, 2).join(', ')} ve ${names.length - 2} zincir daha` : `${names.slice(0, -1).join(', ')} ve ${names[names.length - 1]}`;
   const risky = waiting.filter((i) => i.status.graceUsed).map((i) => i.name);
   const warning = risky.length > 0 ? ` ${risky.join(', ')} için hata payın kalmadı.` : '';
-  return { title: `Bugün ${waiting.length} zincir seni bekliyor`, body: `${shown}. Zinciri kırma!${warning}` };
+  return { title: `Bugün ${waiting.length} zincir seni bekliyor`, body: `${shown}. Sözünü tut!${warning}` };
 }
 
 /** "Salı, 29 Eylül" */
@@ -222,7 +222,7 @@ export function scheduleExplanation(schedule: Schedule): string {
         : sameDays(days, WEEKEND_DAYS)
           ? 'hafta sonları'
           : `${days.map((d) => WEEKDAY_NAMES[d]).join(', ')} günleri`;
-      return `Sadece ${names} yapman gerekir. Diğer günler zinciri kırmaz.`;
+      return `Sadece ${names} yapman gerekir. Diğer günler sayılmaz.`;
     }
     case 'interval':
       return `Her yaptığında ${schedule.every} günlük süren yeniden başlar. ${schedule.every} gün içinde tekrar yapmazsan zincir kırılır.`;

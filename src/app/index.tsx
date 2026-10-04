@@ -70,7 +70,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Txt variant="overline" tone="brand">
-              Zinciri Kırma
+              Sözüm Söz
             </Txt>
             <Txt variant="display" style={{ marginTop: 2 }} accessibilityRole="header">
               {longDateLabel(today)}
@@ -172,7 +172,7 @@ function Summary() {
     subtitle = 'Bütün halkalar yerinde. Yarın görüşürüz.';
   } else {
     title = left === 1 ? '1 halka kaldı' : `${left} halka kaldı`;
-    subtitle = done === 0 ? 'Küçük bir adımla başla.' : 'Az kaldı, zinciri kırma!';
+    subtitle = done === 0 ? 'Küçük bir adımla başla.' : 'Az kaldı, devam et!';
   }
 
   const progress = relevant === 0 ? 1 : done / relevant;

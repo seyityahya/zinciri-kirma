@@ -8,7 +8,7 @@ import { reminderContent } from '@/domain/labels';
 import { computeStatus } from '@/domain/streak';
 import type { AppData } from '@/domain/types';
 
-export const REMINDER_PREFIX = 'zk-reminder-';
+export const REMINDER_PREFIX = 'sozum-reminder-';
 export const REMINDER_DAYS = 14;
 
 export interface PlannedReminder {

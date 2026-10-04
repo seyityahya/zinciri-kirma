@@ -176,7 +176,7 @@ export default function HabitDetailScreen() {
                   <Txt variant="callout" weight="700">
                     Hata payın hazır.{' '}
                   </Txt>
-                  Art arda 7 halkada 1 kez kaçırmak zinciri kırmaz.
+                  Art arda 7 halkada 1 kez kaçırırsan zincirin devam eder.
                 </>
               )}
             </Txt>

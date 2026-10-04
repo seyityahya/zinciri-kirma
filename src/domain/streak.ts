@@ -7,7 +7,7 @@
  *
  * Yöntem: her sıklık türü için "beklenen halkalar" (occurrence) sırası çıkarılır
  * — yapıldı / kaçırıldı / bekliyor — sonra bu sıra baştan sona değerlendirilir.
- * Hata payı açıksa, art arda 7 halkada en fazla 1 kaçırma zinciri kırmaz
+ * Hata payı açıksa, art arda 7 halkada en fazla 1 kaçırmaya izin verilir
  * (iki kaçırma arasında en az 7 halka olmalı); bu kaçırmalar "affedilmiş" sayılır.
  */
 import {

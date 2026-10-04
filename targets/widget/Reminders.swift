@@ -2,7 +2,7 @@ import Foundation
 import UserNotifications
 
 /// Widget'tan "Yaptım"a basılınca akşam hatırlatmalarını, uygulamanın kurduğu planla
-/// birebir aynı şekilde yeniden kurar (kimlik: zk-reminder-YYYY-MM-DD).
+/// birebir aynı şekilde yeniden kurar (kimlik: sozum-reminder-YYYY-MM-DD).
 /// Uygulama tarafı: src/notifications/reminders.ts
 enum ReminderScheduler {
   static func sync(_ snapshot: SharedStore.Snapshot, now: Date = Date()) async {

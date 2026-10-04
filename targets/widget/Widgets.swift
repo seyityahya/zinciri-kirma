@@ -112,7 +112,7 @@ struct EmptyStateView: View {
         .multilineTextAlignment(.center)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .widgetURL(URL(string: "zincirikirma://"))
+    .widgetURL(URL(string: "sozumsoz://"))
   }
 }
 
@@ -197,7 +197,7 @@ struct HabitWidgetView: View {
             Image(systemName: "link").font(.system(size: 18, weight: .bold))
           }
         case .accessoryRectangular, .accessoryInline:
-          Text("Zinciri Kırma: zincir ekle")
+          Text("Sözüm Söz: zincir ekle")
         default:
           EmptyStateView(compact: true)
         }
@@ -425,7 +425,7 @@ struct TodayWidgetView: View {
       }
 
       if entry.items.count > visible.count {
-        Link(destination: URL(string: "zincirikirma://")!) {
+        Link(destination: URL(string: "sozumsoz://")!) {
           Text("+\(entry.items.count - visible.count) zincir daha")
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.secondary)
@@ -467,7 +467,7 @@ struct TodayRow: View {
     let tint = item.habit.tint
     let size: CGFloat = large ? 34 : 28
     HStack(spacing: 9) {
-      Link(destination: item.habit.deepLink ?? URL(string: "zincirikirma://")!) {
+      Link(destination: item.habit.deepLink ?? URL(string: "sozumsoz://")!) {
         HStack(spacing: 9) {
           Text(item.habit.emoji)
             .font(.system(size: large ? 17 : 14))

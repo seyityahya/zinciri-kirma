@@ -22,7 +22,7 @@ describe('planReminders', () => {
     const data = { ...emptyData(), habits: [habit('a', 'İngilizce', ['2026-09-28'])] };
     const plan = planReminders(data, now);
     expect(plan).toHaveLength(14);
-    expect(plan[0]).toMatchObject({ id: 'zk-reminder-2026-09-29', day: '2026-09-29', title: '📚 İngilizce' });
+    expect(plan[0]).toMatchObject({ id: 'sozum-reminder-2026-09-29', day: '2026-09-29', title: '📚 İngilizce' });
     expect(new Date(plan[0].at)).toEqual(new Date(2026, 8, 29, 21, 0));
     expect(new Set(plan.map((p) => p.id)).size).toBe(14);
   });

@@ -54,13 +54,13 @@ const THEMES: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
 const IOS_STEPS = [
   'Ana ekranda boş bir yere basılı tut, simgeler titremeye başlasın.',
   'Sol üstteki “Düzenle” ya da “+” düğmesine dokun, “Widget ekle”yi seç.',
-  'Listeden “Zinciri Kırma”yı bul; “Tek Zincir” ya da “Bugün” widget’ını ekle.',
+  'Listeden “Sözüm Söz”ü bul; “Tek Zincir” ya da “Bugün” widget’ını ekle.',
   'Tek Zincir widget’ına basılı tutup “Widget’ı Düzenle” ile hangi zinciri göstereceğini seç.',
 ];
 
 const ANDROID_STEPS = [
   'Ana ekranda boş bir yere basılı tut ve “Widget’lar”a dokun.',
-  '“Zinciri Kırma”yı bul; “Tek Zincir”, “Mini Zincir” ya da “Bugün” widget’ını ana ekrana sürükle.',
+  '“Sözüm Söz”ü bul; “Tek Zincir”, “Mini Zincir” ya da “Bugün” widget’ını ana ekrana sürükle.',
   'Tek/Mini Zincir widget’ına basılı tutup ayarlarından göstermek istediğin zinciri seçebilirsin.',
 ];
 
@@ -338,7 +338,7 @@ export default function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Txt variant="headline">Hata payı</Txt>
               <Txt variant="caption" tone="secondary" style={{ marginTop: 2 }}>
-                Art arda 7 halkada 1 kez kaçırmak zinciri kırmaz; o halka turuncu görünür ve seni uyarırım.
+                Art arda 7 halkada 1 kez kaçırırsan zincirin devam eder; o halka turuncu görünür ve seni uyarırım.
               </Txt>
             </View>
             <Switch
@@ -413,14 +413,14 @@ export default function SettingsScreen() {
         </Card>
 
         <View style={styles.gap} />
-        <SectionTitle>Zinciri Kırma yöntemi</SectionTitle>
+        <SectionTitle>Nasıl çalışır?</SectionTitle>
         <Card>
           <View style={styles.method}>
             <Flame size={22} color={colors.flame} fill={colors.flame} />
             <Txt variant="callout" tone="secondary" style={{ flex: 1 }}>
-              Hedefini her yaptığında zincirine bir halka ekle. Birkaç gün sonra bir zincirin olur ve tek işin onu
-              kırmamaktır. Planlı olmayan günler zinciri kırmaz. Hata payı açıksa art arda 7 halkada 1 kaçırma
-              affedilir; ikincisi zinciri yeniden başlatır.
+              Kendine bir hedef koy ve her yaptığında zincirine bir halka ekle. Halkalar biriktikçe sözünü ne
+              kadar tuttuğunu görürsün. Planlı olmayan günler sayılmaz. Hata payı açıksa art arda 7 halkada 1
+              kaçırma affedilir; ikincisi zinciri yeniden başlatır.
             </Txt>
           </View>
         </Card>
@@ -485,7 +485,7 @@ export default function SettingsScreen() {
         ) : null}
 
         <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 28 }}>
-          Zinciri Kırma · sürüm {Constants.expoConfig?.version ?? '1.0.0'}
+          Sözüm Söz · sürüm {Constants.expoConfig?.version ?? '1.0.0'}
         </Txt>
       </ScrollView>
     </View>

@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "Zinciri Kırma",
-    "slug": "zinciri-kirma",
+    "name": "Sözüm Söz",
+    "slug": "sozum-soz",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "zincirikirma",
+    "scheme": "sozumsoz",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.seyit.zincirikirma",
+      "bundleIdentifier": "com.seyit.sozumsoz",
       "supportsTablet": true,
       "icon": "./assets/images/icon.png",
       "entitlements": {
         "com.apple.security.application-groups": [
-          "group.com.seyit.zincirikirma"
+          "group.com.seyit.sozumsoz"
         ]
       },
       "infoPlist": {
@@ -23,7 +23,7 @@
       }
     },
     "android": {
-      "package": "com.seyit.zincirikirma",
+      "package": "com.seyit.sozumsoz",
       "adaptiveIcon": {
         "backgroundColor": "#FF5A36",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

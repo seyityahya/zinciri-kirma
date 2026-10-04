@@ -38,7 +38,7 @@ async function settle() {
 
 async function seed(habits: object[]) {
   __resetStoreForTests();
-  await AsyncStorage.setItem('zk.data.v1', JSON.stringify({ version: 1, updatedAt: 1, habits }));
+  await AsyncStorage.setItem('sozum.data.v1', JSON.stringify({ version: 1, updatedAt: 1, habits }));
 }
 
 beforeEach(async () => {
@@ -261,7 +261,7 @@ describe('uygulama akışı', () => {
 
     fireEvent.press(screen.getByTestId('backup-restore'));
     await settle();
-    expect(alert).toHaveBeenCalledWith('Bu bir yedek dosyası değil', expect.stringContaining('zinciri-kirma-yedek'));
+    expect(alert).toHaveBeenCalledWith('Bu bir yedek dosyası değil', expect.stringContaining('sozum-soz-yedek'));
     expect(screen.queryByText('Yedeği geri yükle')).toBeNull();
     alert.mockRestore();
   });

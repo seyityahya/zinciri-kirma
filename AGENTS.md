@@ -40,11 +40,11 @@ Docs: https://docs.expo.dev/eas/index.md
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
 
-## Project notes (Zinciri Kırma)
+## Project notes (Sözüm Söz)
 
 - UI text is Turkish. Use `upperTr()` (src/components/ui.tsx) instead of `textTransform: 'uppercase'` — the latter breaks i/İ.
 - Chain/streak rules live in `src/domain/streak.ts` and `src/domain/labels.ts`; the iOS widget has a Swift copy in `targets/widget/ChainLogic.swift`. Change both together and run `npm run test:swift`.
 - Persistence goes through `src/data/store.ts`: mutations must be absolute (e.g. "set day done"), because they are re-applied to the latest on-disk data so widget changes are never overwritten.
-- iOS widget ↔ app share data via App Group UserDefaults key `zk.data.v1`; Android widgets run as headless JS in `src/widgets/android-home/`.
+- iOS widget ↔ app share data via App Group UserDefaults key `sozum.data.v1`; Android widgets run as headless JS in `src/widgets/android-home/`.
 - Backup/restore: file format, validation and merge rules in `src/domain/backup.ts`; file IO in `src/data/backup-files.ts`. If `AppData` gains fields, keep `parseBackup` accepting older backups, and bump `BACKUP_VERSION` only for changes old app versions cannot read.
 - The folder name contains "ı": run iOS commands with `LANG=en_US.UTF-8` (the npm scripts do this) and keep `plugins/with-utf8-podfile.js`.

@@ -2,7 +2,7 @@
 module.exports = (config) => ({
   type: 'widget',
   name: 'ZincirWidget',
-  displayName: 'Zinciri Kırma',
+  displayName: 'Sözüm Söz',
   bundleIdentifier: '.widget',
   // Etkileşimli widget'lar (AppIntent düğmeleri) iOS 17 gerektirir.
   deploymentTarget: '17.0',

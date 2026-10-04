@@ -44,5 +44,5 @@ extension Color {
 
 extension ZKHabit {
   var tint: Color { Color(hex: color) }
-  var deepLink: URL? { URL(string: "zincirikirma://habit/\(id)") }
+  var deepLink: URL? { URL(string: "sozumsoz://habit/\(id)") }
 }

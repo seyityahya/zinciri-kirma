@@ -7,7 +7,9 @@ import { fullDateLabel } from './labels';
 import type { AppData, Habit } from './types';
 import { normalizeAppData } from './validate';
 
-export const BACKUP_FORMAT = 'zinciri-kirma-backup';
+export const BACKUP_FORMAT = 'sozum-soz-backup';
+/** Uygulamanın eski adıyla (Zinciri Kırma) alınmış yedekler de geri yüklenebilsin. */
+const LEGACY_BACKUP_FORMATS: readonly unknown[] = ['zinciri-kirma-backup'];
 export const BACKUP_VERSION = 1;
 /** Yıllarca tutulan veri bile birkaç yüz KB eder; bundan büyüğü yedek olamaz. */
 export const BACKUP_MAX_BYTES = 5 * 1024 * 1024;
@@ -56,14 +58,14 @@ export function parseBackup(text: string): ParsedBackup {
 
   let payload: unknown;
   let exportedAt: number | null = null;
-  if (v.format === BACKUP_FORMAT) {
+  if (v.format === BACKUP_FORMAT || LEGACY_BACKUP_FORMATS.includes(v.format)) {
     if (typeof v.version !== 'number') return { ok: false, error: 'not-backup' };
     if (v.version > BACKUP_VERSION) return { ok: false, error: 'newer-version' };
     payload = v.data;
     const time = typeof v.exportedAt === 'string' ? Date.parse(v.exportedAt) : NaN;
     exportedAt = Number.isFinite(time) ? time : null;
   } else if (Array.isArray(v.habits)) {
-    // Uygulamanın kendi kayıt biçimi (zk.data.v1) de kabul edilir.
+    // Uygulamanın kendi kayıt biçimi (sozum.data.v1) de kabul edilir.
     payload = v;
   } else {
     return { ok: false, error: 'not-backup' };
@@ -126,9 +128,9 @@ export function countLinks(habits: readonly Habit[]): number {
   return habits.reduce((sum, h) => sum + h.completions.length, 0);
 }
 
-/** "zinciri-kirma-yedek-2026-10-01.json" (her platformda sorunsuz olsun diye ASCII). */
+/** "sozum-soz-yedek-2026-10-01.json" (her platformda sorunsuz olsun diye ASCII). */
 export function backupFileName(now: Date): string {
-  return `zinciri-kirma-yedek-${toDayKey(now)}.json`;
+  return `sozum-soz-yedek-${toDayKey(now)}.json`;
 }
 
 /** "1 Ekim 2026, 14:32" */
@@ -165,14 +167,14 @@ export function backupErrorText(error: BackupError): { title: string; message: s
     case 'newer-version':
       return {
         title: 'Uygulamayı güncellemelisin',
-        message: 'Bu yedek Zinciri Kırma’nın daha yeni bir sürümüyle alınmış. Uygulamayı güncelleyip tekrar dene.',
+        message: 'Bu yedek Sözüm Söz’ün daha yeni bir sürümüyle alınmış. Uygulamayı güncelleyip tekrar dene.',
       };
     case 'empty':
       return { title: 'Yedek boş', message: 'Bu yedek dosyasında hiç zincir yok.' };
     case 'not-backup':
       return {
         title: 'Bu bir yedek dosyası değil',
-        message: 'Zinciri Kırma’dan aldığın “zinciri-kirma-yedek-…” adlı dosyayı seç.',
+        message: 'Sözüm Söz’den aldığın “sozum-soz-yedek-…” adlı dosyayı seç.',
       };
   }
 }

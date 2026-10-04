@@ -89,7 +89,7 @@ describe('computeStatus — her gün', () => {
 });
 
 describe('computeStatus — hafta içi / belirli günler', () => {
-  it('hafta sonu zinciri kırmaz', () => {
+  it('hafta sonu zinciri koparmaz', () => {
     // Geçen hafta Pzt–Cum yapıldı, bugün Pazartesi (henüz yapılmadı)
     const lastWeek = range('2026-09-21', 5);
     const s = computeStatus(habit(WEEKDAYS, lastWeek), MON);

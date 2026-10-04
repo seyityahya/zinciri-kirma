@@ -9,20 +9,20 @@ const { withDangerousMod } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
-const MARKER = '# [zinciri-kirma] utf8-podfile';
+const MARKER = '# [sozum-soz] utf8-podfile';
 
 const PATCH = `${MARKER}
 Encoding.default_external = Encoding::UTF_8
 ::Pod::Executable.singleton_class.class_eval do
-  unless method_defined?(:zk_execute_command_without_utf8)
-    alias_method :zk_execute_command_without_utf8, :execute_command
+  unless method_defined?(:sozum_execute_command_without_utf8)
+    alias_method :sozum_execute_command_without_utf8, :execute_command
     define_method(:execute_command) do |*args|
-      output = zk_execute_command_without_utf8(*args)
+      output = sozum_execute_command_without_utf8(*args)
       output.is_a?(String) ? output.dup.force_encoding(Encoding::UTF_8) : output
     end
   end
 end
-# [zinciri-kirma] end
+# [sozum-soz] end
 `;
 
 module.exports = function withUtf8Podfile(config) {

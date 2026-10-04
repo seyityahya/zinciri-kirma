@@ -17,7 +17,7 @@ const MOVE_STEPS = [
   Platform.OS === 'ios'
     ? 'Bu telefonda “Yedek al”a dokun; dosyayı Dosyalar’a (iCloud Drive) kaydet ya da kendine gönder.'
     : 'Bu telefonda “Yedek al”a dokun; dosyayı Drive’a kaydet ya da kendine gönder.',
-  'Yeni telefona Zinciri Kırma’yı kur.',
+  'Yeni telefona Sözüm Söz’ü kur.',
   '“Yedekten geri yükle”ye dokun ve dosyayı seç. Zincirlerin kaldığı yerden devam eder.',
 ];
 

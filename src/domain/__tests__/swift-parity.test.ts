@@ -142,7 +142,7 @@ maybe('Swift widget mantığı ile parite', () => {
   let tmp = '';
 
   beforeAll(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zk-parity-'));
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sozum-parity-'));
     binary = path.join(tmp, 'parity');
     const result = spawnSync(
       'xcrun',

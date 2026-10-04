@@ -1,11 +1,11 @@
-# Zinciri Kırma 🔗
+# Sözüm Söz
 
-Hedefini koy, her yaptığında zincirine bir halka ekle ve zinciri kırma.
+Hedefini koy, her yaptığında zincirine bir halka ekle ve sözünü ne kadar tuttuğunu gör.
 Ana ekran widget'ı sayesinde uygulamayı açmadan tek dokunuşla işaretleyebilir,
 zincirinin kaç gündür sürdüğünü her an görebilirsin.
 
 - **Sıklıklar:** her gün, hafta içi, belirli günler (ör. Pzt/Çar/Cum), birkaç günde bir (ör. 2 günde bir), haftada N kez
-- **Hata payı:** art arda 7 halkada 1 kaçırma zinciri kırmaz; o halka turuncu görünür ve uyarı verilir
+- **Hata payı:** art arda 7 halkada 1 kaçırma affedilir; o halka turuncu görünür ve uyarı verilir
 - **Gün bitişi:** gün varsayılan olarak gece 03:00'te biter (geç yatanlar için); ayarlardan değiştirilebilir
 - **Akşam hatırlatması:** o gün yapılmamış zincirler için günde tek bir toplu bildirim (varsayılan 21:00)
 - **Widget'lar (iOS + Android):**
@@ -16,7 +16,7 @@ zincirinin kaç gündür sürdüğünü her an görebilirsin.
 - Takvimden geçmiş günleri işaretleme/düzeltme, en uzun seri, toplam, başarı oranı
 - Açık/koyu tema, titreşimli geri bildirim, VoiceOver desteği
 - Hesap ve sunucu yok: veriler yalnızca cihazda
-- **Yedekleme:** tüm zincirler tek bir dosyaya (`zinciri-kirma-yedek-YYYY-AA-GG.json`) alınır ve Drive'a,
+- **Yedekleme:** tüm zincirler tek bir dosyaya (`sozum-soz-yedek-YYYY-AA-GG.json`) alınır ve Drive'a,
   Dosyalar'a ya da kendine gönderilir; yeni telefonda (iPhone ↔ Android dahil) dosyadan geri yüklenir.
   Geri yüklerken mevcut zincirlerle birleştirme ya da onları değiştirme seçilebilir ve işlem geri alınabilir.
 
@@ -35,11 +35,12 @@ npm run android    # Android emülatör/cihazda derler ve açar
 
 ### Gerçek iPhone'a kurmak
 
-1. `ios/ZinciriKrma.xcworkspace` dosyasını Xcode'da aç.
-2. **ZinciriKrma** ve **ZincirWidget** hedeflerinin ikisinde de *Signing & Capabilities* altında kendi
+1. `ios/SzmSz.xcworkspace` dosyasını Xcode'da aç. (Expo, iOS proje adını uygulama adından Türkçe harfleri
+   atarak üretir; telefonda ve mağazada görünen ad yine "Sözüm Söz"dür.)
+2. **SzmSz** ve **ZincirWidget** hedeflerinin ikisinde de *Signing & Capabilities* altında kendi
    Apple hesabını (Team) seç.
-3. İki hedefte de *App Groups* altında `group.com.seyit.zincirikirma` işaretli olmalı. Bundle kimliğini
-   değiştirirsen (ör. `com.adin.zincirikirma`), App Group adını şu üç yerde birlikte güncelle:
+3. İki hedefte de *App Groups* altında `group.com.seyit.sozumsoz` işaretli olmalı. Bundle kimliğini
+   değiştirirsen (ör. `com.adin.sozumsoz`), App Group adını şu üç yerde birlikte güncelle:
    - `app.json` → `ios.entitlements`
    - `targets/widget/SharedStore.swift` → `appGroup`
    - `src/config.ts` (yedek değer; asıl değer `app.json`'dan okunur)
@@ -47,16 +48,16 @@ npm run android    # Android emülatör/cihazda derler ve açar
 
 ### Widget ekleme
 
-- **iOS:** Ana ekranda boş bir yere basılı tut → sol üstte **Düzenle** → **Widget Ekle** → "Zinciri Kırma".
+- **iOS:** Ana ekranda boş bir yere basılı tut → sol üstte **Düzenle** → **Widget Ekle** → "Sözüm Söz".
   Tek Zincir widget'ına basılı tutup **Widget'ı Düzenle** ile gösterilecek zinciri seç.
-- **Android:** Ana ekranda basılı tut → **Widget'lar** → "Zinciri Kırma". Tek Zincir'i eklerken zinciri seçersin.
+- **Android:** Ana ekranda basılı tut → **Widget'lar** → "Sözüm Söz". Tek Zincir'i eklerken zinciri seçersin.
   Uygulamadaki **Ayarlar → Widget** bölümünden de tek dokunuşla ekleyebilirsin.
 
 ## Zincir kuralları
 
 | Sıklık | Zincir birimi | Ne zaman kırılır? |
 | --- | --- | --- |
-| Her gün / hafta içi / belirli günler | gün | Planlı bir gün yapılmadan geçerse. Planlı olmayan günler zinciri kırmaz. |
+| Her gün / hafta içi / belirli günler | gün | Planlı bir gün yapılmadan geçerse. Planlı olmayan günler sayılmaz. |
 | N günde bir | kez | Son yapılıştan sonra N gün içinde tekrar yapılmazsa. |
 | Haftada N kez | hafta | Bir hafta (Pzt–Paz) hedef sayıya ulaşmadan biterse. İlk hafta, kalan gün sayısına göre esnetilir. |
 
@@ -129,5 +130,5 @@ npm run verify       # Hepsi
 
 Proje klasörünün adında "ı" harfi olduğu için CocoaPods'un bilinen bir kodlama hatası tetikleniyor.
 `plugins/with-utf8-podfile.js` eklentisi bunu her `prebuild`'de otomatik olarak düzeltir. Yine de
-herhangi bir yerel derleme aracı sorun çıkarırsa, klasörü `zinciri-kirma` olarak yeniden adlandırmak kesin
+herhangi bir yerel derleme aracı sorun çıkarırsa, klasörü `sozum-soz` olarak yeniden adlandırmak kesin
 çözümdür.
